@@ -2,24 +2,34 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getProfile, updateUsername, getGymPartners } from "@/lib/storage";
+import {
+  getProfile, updateUsername, getGymPartners,
+  getPendingShareRequests, acceptShareRequest, declineShareRequest,
+} from "@/lib/storage";
 import { getSupabase } from "@/lib/supabase";
 
 export default function ProfilePage() {
   const router = useRouter();
   const [profile, setProfile] = useState(null);
   const [partners, setPartners] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingUsername, setEditingUsername] = useState(false);
   const [newUsername, setNewUsername] = useState("");
   const [usernameError, setUsernameError] = useState("");
   const [usernameSaved, setUsernameSaved] = useState(false);
+  const [actionLoading, setActionLoading] = useState(null);
 
   async function load() {
     setLoading(true);
-    const [p, gym] = await Promise.all([getProfile(), getGymPartners()]);
+    const [p, gym, reqs] = await Promise.all([
+      getProfile(),
+      getGymPartners(),
+      getPendingShareRequests(),
+    ]);
     setProfile(p);
     setPartners(gym);
+    setRequests(reqs);
     setLoading(false);
   }
 
@@ -40,6 +50,20 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleAccept(programId) {
+    setActionLoading(programId + "_accept");
+    await acceptShareRequest(programId);
+    await load();
+    setActionLoading(null);
+  }
+
+  async function handleDecline(programId) {
+    setActionLoading(programId + "_decline");
+    await declineShareRequest(programId);
+    await load();
+    setActionLoading(null);
+  }
+
   async function handleLogout() {
     const supabase = getSupabase();
     await supabase.auth.signOut();
@@ -57,6 +81,53 @@ export default function ProfilePage() {
       }}>
         Profiel
       </h1>
+
+      {/* Inkomende share requests */}
+      {requests.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: "#e63946", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+            Uitnodigingen
+            <span style={{ background: "#e63946", color: "#fff", borderRadius: 10, fontSize: 11, fontWeight: 800, padding: "1px 7px" }}>
+              {requests.length}
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {requests.map((req) => (
+              <div key={req.programId} style={{ background: "#0f0f0f", border: "1px solid #e6394644", borderRadius: 12, padding: 14 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>{req.programName}</div>
+                    <div style={{ fontSize: 12, color: "#555" }}>
+                      Van: <span style={{ color: "#888" }}>{req.fromUsername}</span>
+                      {req.fromEmail && <span style={{ color: "#444" }}> · {req.fromEmail}</span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#444", marginTop: 2 }}>
+                      {req.programGoal && <span style={{ textTransform: "capitalize" }}>{req.programGoal}</span>}
+                      {req.programWeeks && <span> · {req.programWeeks} weken</span>}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => handleAccept(req.programId)}
+                    disabled={actionLoading !== null}
+                    style={{ flex: 1, background: "#e63946", color: "#fff", padding: "10px 0", fontSize: 13, fontWeight: 700, borderRadius: 8 }}
+                  >
+                    {actionLoading === req.programId + "_accept" ? "..." : "Accepteren"}
+                  </button>
+                  <button
+                    onClick={() => handleDecline(req.programId)}
+                    disabled={actionLoading !== null}
+                    style={{ flex: 1, background: "#1a1a1a", color: "#888", padding: "10px 0", fontSize: 13, fontWeight: 600, borderRadius: 8, border: "1px solid #2a2a2a" }}
+                  >
+                    {actionLoading === req.programId + "_decline" ? "..." : "Weigeren"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Account info */}
       <div style={{ background: "#0f0f0f", border: "1px solid #252525", borderRadius: 12, padding: 16, marginBottom: 16 }}>
@@ -136,7 +207,6 @@ export default function ProfilePage() {
                     <div style={{ fontSize: 12, color: "#555" }}>{p.email}</div>
                   </div>
                 </div>
-
                 {p.sharedByMe.length > 0 && (
                   <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>
                     <span style={{ color: "#555" }}>Jij deelt: </span>

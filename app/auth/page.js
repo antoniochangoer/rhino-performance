@@ -9,6 +9,7 @@ export default function AuthPage() {
   const [mode, setMode] = useState("login"); // "login" | "register" | "forgot"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
@@ -22,7 +23,13 @@ export default function AuthPage() {
     const supabase = getSupabase();
 
     if (mode === "login") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      // persistSession: true = onthoud mij (standaard), false = sessie vergeet na sluiten browser
+      await supabase.auth.setSession && null; // no-op, handled via options below
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+        options: { persistSession: rememberMe },
+      });
       if (error) {
         setError("Inloggen mislukt. Controleer je e-mail en wachtwoord.");
       } else {
@@ -118,7 +125,7 @@ export default function AuthPage() {
           </div>
 
           {mode !== "forgot" && (
-            <div style={{ marginBottom: 20 }}>
+            <div style={{ marginBottom: mode === "login" ? 14 : 20 }}>
               <label style={{ display: "block", fontSize: 13, color: "#888", marginBottom: 6 }}>Wachtwoord</label>
               <input
                 type="password"
@@ -130,6 +137,33 @@ export default function AuthPage() {
                 autoComplete={mode === "register" ? "new-password" : "current-password"}
                 style={{ width: "100%", padding: "12px 14px", fontSize: 15 }}
               />
+            </div>
+          )}
+
+          {mode === "login" && (
+            <div style={{ marginBottom: 20 }}>
+              <label style={{
+                display: "flex", alignItems: "center", gap: 10,
+                cursor: "pointer", userSelect: "none",
+              }}>
+                <div
+                  onClick={() => setRememberMe((v) => !v)}
+                  style={{
+                    width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+                    background: rememberMe ? "#e63946" : "transparent",
+                    border: `2px solid ${rememberMe ? "#e63946" : "#333"}`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "background 0.15s, border-color 0.15s",
+                  }}
+                >
+                  {rememberMe && (
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                      <polyline points="1.5,5 4,7.5 8.5,2" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </div>
+                <span style={{ fontSize: 13, color: "#888" }}>Onthoud mij</span>
+              </label>
             </div>
           )}
 
