@@ -45,18 +45,31 @@ export default function ProgressPage() {
   const [selected, setSelected] = useState("");
   const [period, setPeriod] = useState(1);
   const [allData, setAllData] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const names = getAllExerciseNames();
-    setExercises(names);
-    if (names.length > 0) setSelected(names[0]);
+    async function load() {
+      setLoading(true);
+      const names = await getAllExerciseNames();
+      setExercises(names);
+      if (names.length > 0) setSelected(names[0]);
+      setLoading(false);
+    }
+    load();
   }, []);
 
   useEffect(() => {
-    if (selected) {
-      setAllData(getExerciseHistory(selected, 200));
+    async function loadHistory() {
+      if (selected) {
+        setAllData(await getExerciseHistory(selected, 200));
+      }
     }
+    loadHistory();
   }, [selected]);
+
+  if (loading) {
+    return <div style={{ color: "#888", padding: 32, textAlign: "center" }}>Laden...</div>;
+  }
 
   const data = filterByPeriod(allData, PERIODS[period].days);
   const chartData = data.map((d) => ({ ...d, label: formatDate(d.date) }));
@@ -81,7 +94,6 @@ export default function ProgressPage() {
         </div>
       ) : (
         <>
-          {/* Exercise selector */}
           <div style={{ marginBottom: 16 }}>
             <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 }}>Oefening</label>
             <select
@@ -95,7 +107,6 @@ export default function ProgressPage() {
             </select>
           </div>
 
-          {/* Period filter */}
           <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
             {PERIODS.map((p, i) => (
               <button
@@ -115,7 +126,6 @@ export default function ProgressPage() {
             ))}
           </div>
 
-          {/* Stats row */}
           {hasData && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 24 }}>
               {[
@@ -136,7 +146,6 @@ export default function ProgressPage() {
             </div>
           )}
 
-          {/* Chart */}
           {!hasData ? (
             <div style={{ background: "#0f0f0f", border: "1px solid #252525", borderRadius: 12, padding: "40px 16px", textAlign: "center", color: "#555" }}>
               Geen data voor deze periode
@@ -164,22 +173,14 @@ export default function ProgressPage() {
                     width={40}
                   />
                   <Tooltip content={<CustomTooltip />} />
-                  {/* e1RM line — Rhino red */}
                   <Line
-                    type="monotone"
-                    dataKey="e1rm"
-                    stroke="#e63946"
-                    strokeWidth={2.5}
+                    type="monotone" dataKey="e1rm" stroke="#e63946" strokeWidth={2.5}
                     dot={{ fill: "#e63946", r: 4, strokeWidth: 0 }}
                     activeDot={{ fill: "#fff", stroke: "#e63946", r: 6, strokeWidth: 2 }}
                     name="e1RM"
                   />
-                  {/* Actual weight — metallic silver */}
                   <Line
-                    type="monotone"
-                    dataKey="bestWeight"
-                    stroke="#c0c0c0"
-                    strokeWidth={2}
+                    type="monotone" dataKey="bestWeight" stroke="#c0c0c0" strokeWidth={2}
                     strokeDasharray="5 3"
                     dot={{ fill: "#c0c0c0", r: 3, strokeWidth: 0 }}
                     activeDot={{ fill: "#fff", stroke: "#c0c0c0", r: 5, strokeWidth: 2 }}
@@ -188,7 +189,6 @@ export default function ProgressPage() {
                 </LineChart>
               </ResponsiveContainer>
 
-              {/* Legend */}
               <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 12, paddingTop: 12, borderTop: "1px solid #161616" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <div style={{ width: 20, height: 3, background: "#e63946", borderRadius: 2 }} />

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { getSupabase } from "@/lib/supabase";
 
 const links = [
   {
@@ -52,8 +53,15 @@ const links = [
 
 export default function Nav() {
   const pathname = usePathname();
+  const router = useRouter();
 
-  if (pathname.startsWith("/train/")) return null;
+  if (pathname.startsWith("/train/") || pathname.startsWith("/auth")) return null;
+
+  async function handleLogout() {
+    const supabase = getSupabase();
+    await supabase.auth.signOut();
+    router.replace("/auth");
+  }
 
   return (
     <nav style={{
@@ -94,6 +102,24 @@ export default function Nav() {
           </Link>
         );
       })}
+
+      {/* Logout button */}
+      <button
+        onClick={handleLogout}
+        style={{
+          display: "flex", flexDirection: "column", alignItems: "center",
+          gap: 4, padding: "4px 12px", background: "transparent", border: "none", cursor: "pointer",
+        }}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+        <span style={{ fontSize: 10, color: "#555", fontWeight: 400, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+          Uit
+        </span>
+      </button>
     </nav>
   );
 }

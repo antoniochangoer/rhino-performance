@@ -28,18 +28,6 @@ const MiniTooltip = ({ active, payload }) => {
   );
 };
 
-function buildHistoryMap(exercises) {
-  const map = {};
-  for (const ex of exercises) {
-    const hist = getExerciseHistory(ex.name, 10).map((d) => ({
-      ...d,
-      label: formatDate(d.date),
-    }));
-    if (hist.length >= 2) map[ex.name] = hist;
-  }
-  return map;
-}
-
 export default function HistoryDetailPage({ params }) {
   const { id } = use(params);
   const router = useRouter();
@@ -47,23 +35,39 @@ export default function HistoryDetailPage({ params }) {
   const [program, setProgram] = useState(null);
   const [historyMap, setHistoryMap] = useState({});
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  async function buildHistoryMap(exercises) {
+    const map = {};
+    for (const ex of exercises) {
+      const hist = (await getExerciseHistory(ex.name, 10)).map((d) => ({
+        ...d,
+        label: formatDate(d.date),
+      }));
+      if (hist.length >= 2) map[ex.name] = hist;
+    }
+    return map;
+  }
 
   useEffect(() => {
-    const l = getLog(id);
-    if (!l) { router.push("/history"); return; }
-    setLog(l);
-    if (l.programId) setProgram(getProgram(l.programId));
-    setHistoryMap(buildHistoryMap(l.exercises));
+    async function loadData() {
+      setLoading(true);
+      const l = await getLog(id);
+      if (!l) { router.push("/history"); return; }
+      setLog(l);
+      if (l.programId) setProgram(await getProgram(l.programId));
+      setHistoryMap(await buildHistoryMap(l.exercises));
+      setLoading(false);
+    }
+    loadData();
   }, [id]);
 
-  if (!log) return <div style={{ color: "#888", padding: 32, textAlign: "center" }}>Laden...</div>;
+  if (loading || !log) return <div style={{ color: "#888", padding: 32, textAlign: "center" }}>Laden...</div>;
 
-  function persistLog(updatedLog) {
-    updateLog(updatedLog.id, { exercises: updatedLog.exercises });
-    // Rebuild history charts live after each change
-    setHistoryMap(buildHistoryMap(updatedLog.exercises));
+  async function persistLog(updatedLog) {
+    await updateLog(updatedLog.id, { exercises: updatedLog.exercises });
+    setHistoryMap(await buildHistoryMap(updatedLog.exercises));
     setLog({ ...updatedLog });
-    // Brief "opgeslagen" indicator
     setSaved(true);
     setTimeout(() => setSaved(false), 1200);
   }
@@ -74,7 +78,6 @@ export default function HistoryDetailPage({ params }) {
     const s = ex.sets[setIdx];
     s[field] = value;
 
-    // Auto-calculate implied RPE when weight or reps change
     if ((field === "weight" || field === "reps") && ex.oneRepMax > 0) {
       const w = field === "weight" ? value : s.weight;
       const r = field === "reps" ? value : s.reps;
@@ -122,9 +125,9 @@ export default function HistoryDetailPage({ params }) {
             {saved ? "✓ Opgeslagen" : "Bewerkbaar"}
           </div>
           <button
-            onClick={() => {
+            onClick={async () => {
               if (!confirm(`Weet je zeker dat je de training "${log.sessionName}" van ${log.date} wilt verwijderen?\n\nDeze actie kan niet ongedaan worden gemaakt.`)) return;
-              deleteLog(log.id);
+              await deleteLog(log.id);
               router.push("/history");
             }}
             style={{ background: "transparent", color: "#333", fontSize: 20, lineHeight: 1, padding: "4px 6px", border: "none" }}
@@ -164,7 +167,6 @@ export default function HistoryDetailPage({ params }) {
 
           return (
             <div key={ex.exerciseId} style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 12 }}>
-              {/* Exercise header */}
               <div style={{ padding: "12px 14px", borderBottom: "1px solid #2a2a2a" }}>
                 <div style={{ fontWeight: 700, fontSize: 16 }}>{ex.name}</div>
                 <div style={{ display: "flex", gap: 12, marginTop: 4, flexWrap: "wrap" }}>
@@ -178,7 +180,6 @@ export default function HistoryDetailPage({ params }) {
                 </div>
               </div>
 
-              {/* Column headers */}
               <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 1fr 1fr 60px", gap: 6, padding: "8px 14px 4px", alignItems: "center" }}>
                 <div style={{ fontSize: 11, color: "#888" }}>#</div>
                 <div style={{ fontSize: 11, color: "#888", textAlign: "center" }}>Gewicht (kg)</div>
@@ -187,7 +188,6 @@ export default function HistoryDetailPage({ params }) {
                 <div style={{ fontSize: 11, color: "#888", textAlign: "center" }}>e1RM</div>
               </div>
 
-              {/* Sets — editable */}
               <div style={{ padding: "0 14px 14px" }}>
                 {ex.sets.map((s, si) => {
                   const color = rpeColor(Number(s.rpe), ex.targetRpe);
@@ -202,7 +202,6 @@ export default function HistoryDetailPage({ params }) {
                         gap: 6,
                         alignItems: "center",
                       }}>
-                        {/* Set indicator */}
                         <div style={{
                           width: 24, height: 24, borderRadius: "50%",
                           background: s.completed ? "#2d9e47" : (color ? RPE_COLOR_MAP[color] : "#2a2a2a"),
@@ -213,57 +212,31 @@ export default function HistoryDetailPage({ params }) {
                           {s.completed ? "✓" : si + 1}
                         </div>
 
-                        {/* Weight */}
                         <input
-                          type="number"
-                          min="0"
-                          step="2.5"
-                          value={s.weight}
+                          type="number" min="0" step="2.5" value={s.weight}
                           onChange={(e) => updateSet(exIdx, si, "weight", e.target.value)}
                           style={{
-                            padding: "9px 6px",
-                            fontSize: 15,
-                            textAlign: "center",
-                            borderRadius: 8,
+                            padding: "9px 6px", fontSize: 15, textAlign: "center", borderRadius: 8,
                             border: `1px solid ${color ? RPE_COLOR_MAP[color] + "66" : "#2a2a2a"}`,
-                            background: "#1a1a1a",
-                            color: "#f0f0f0",
-                            width: "100%",
+                            background: "#1a1a1a", color: "#f0f0f0", width: "100%",
                           }}
                         />
 
-                        {/* Reps */}
                         <input
-                          type="number"
-                          min="1"
-                          step="1"
-                          value={s.reps}
+                          type="number" min="1" step="1" value={s.reps}
                           onChange={(e) => updateSet(exIdx, si, "reps", e.target.value)}
                           style={{
-                            padding: "9px 6px",
-                            fontSize: 15,
-                            textAlign: "center",
-                            borderRadius: 8,
+                            padding: "9px 6px", fontSize: 15, textAlign: "center", borderRadius: 8,
                             border: `1px solid ${color ? RPE_COLOR_MAP[color] + "66" : "#2a2a2a"}`,
-                            background: "#1a1a1a",
-                            color: "#f0f0f0",
-                            width: "100%",
+                            background: "#1a1a1a", color: "#f0f0f0", width: "100%",
                           }}
                         />
 
-                        {/* RPE */}
                         <input
-                          type="number"
-                          min="5"
-                          max="10"
-                          step="0.5"
-                          value={s.rpe}
+                          type="number" min="5" max="10" step="0.5" value={s.rpe}
                           onChange={(e) => updateSet(exIdx, si, "rpe", e.target.value)}
                           style={{
-                            padding: "9px 6px",
-                            fontSize: 15,
-                            textAlign: "center",
-                            borderRadius: 8,
+                            padding: "9px 6px", fontSize: 15, textAlign: "center", borderRadius: 8,
                             border: `2px solid ${isWeak ? "#e63946" : (color ? RPE_COLOR_MAP[color] + "66" : "#2a2a2a")}`,
                             background: isWeak ? "#1a0505" : "#1a1a1a",
                             color: isWeak ? "#e63946" : "#f0f0f0",
@@ -272,13 +245,11 @@ export default function HistoryDetailPage({ params }) {
                           }}
                         />
 
-                        {/* e1RM — live */}
                         <div style={{ textAlign: "center", fontSize: 13, color: "#888" }}>
                           {e1rm ? `~${e1rm}` : "-"}
                         </div>
                       </div>
 
-                      {/* e1RM sub-label */}
                       {e1rm && ex.oneRepMax > 0 && (
                         <div style={{ fontSize: 11, color: "#666", paddingLeft: 34, marginTop: 2 }}>
                           RPE auto-berekend
@@ -288,14 +259,10 @@ export default function HistoryDetailPage({ params }) {
                   );
                 })}
 
-                {/* Weakling banner */}
                 {showWeakling && (
                   <div style={{
-                    marginTop: 10,
-                    background: "#1a0000",
-                    border: "2px solid #e63946",
-                    borderRadius: 10,
-                    padding: "12px 14px",
+                    marginTop: 10, background: "#1a0000", border: "2px solid #e63946",
+                    borderRadius: 10, padding: "12px 14px",
                   }}>
                     <div style={{ fontWeight: 800, fontSize: 15, color: "#e63946", marginBottom: 4, letterSpacing: 0.5 }}>
                       ⚠ WEAKLING ALERT
@@ -308,7 +275,6 @@ export default function HistoryDetailPage({ params }) {
                 )}
               </div>
 
-              {/* Mini progress chart — rebuilds live on change */}
               {history && (
                 <div style={{ borderTop: "1px solid #1a1a1a", padding: "12px 14px" }}>
                   <div style={{ fontSize: 11, color: "#888", marginBottom: 6 }}>
@@ -327,10 +293,7 @@ export default function HistoryDetailPage({ params }) {
                       />
                       <Tooltip content={<MiniTooltip />} />
                       <Line
-                        type="monotone"
-                        dataKey="e1rm"
-                        stroke="#e63946"
-                        strokeWidth={2}
+                        type="monotone" dataKey="e1rm" stroke="#e63946" strokeWidth={2}
                         dot={{ fill: "#e63946", r: 3, strokeWidth: 0 }}
                         activeDot={{ fill: "#fff", stroke: "#e63946", r: 5, strokeWidth: 2 }}
                       />

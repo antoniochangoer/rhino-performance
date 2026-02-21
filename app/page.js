@@ -10,27 +10,44 @@ export default function DashboardPage() {
   const [programs, setPrograms] = useState([]);
   const [activeLog, setActiveLog] = useState(null);
   const [recentLogs, setRecentLogs] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
 
-  function load() {
-    setPrograms(getPrograms());
-    setActiveLog(getActiveLog());
-    setRecentLogs(getLogs().filter((l) => l.status === "completed").slice(0, 3));
+  async function load() {
+    setPageLoading(true);
+    const [allPrograms, log, allLogs] = await Promise.all([
+      getPrograms(),
+      getActiveLog(),
+      getLogs(),
+    ]);
+    setPrograms(allPrograms);
+    setActiveLog(log);
+    setRecentLogs(allLogs.filter((l) => l.status === "completed").slice(0, 3));
+    setPageLoading(false);
   }
 
   useEffect(() => { load(); }, []);
 
-  function handleStart(programId) {
-    setLoading(true);
-    const log = startTraining(programId);
+  async function handleStart(programId) {
+    setStarting(true);
+    const log = await startTraining(programId);
     if (log) router.push(`/train/${log.id}`);
-    setLoading(false);
+    setStarting(false);
+  }
+
+  async function handleActivateProgram(programId) {
+    await setActiveProgram(programId);
+    await load();
   }
 
   async function handleSeed() {
     const { seedTestData } = await import("@/lib/seedData");
-    seedTestData();
-    load();
+    await seedTestData();
+    await load();
+  }
+
+  if (pageLoading) {
+    return <div style={{ color: "#888", padding: 32, textAlign: "center" }}>Laden...</div>;
   }
 
   const activeProgram = programs.find((p) => p.active) || null;
@@ -110,7 +127,6 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* Week progress */}
         <div style={{ marginBottom: isActive ? 4 : 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
             <span style={{ fontSize: 11, color: "#444" }}>Week voortgang</span>
@@ -121,7 +137,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Block progress */}
         {totalWeeks && isActive && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
@@ -134,7 +149,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Next session + next week preview (active only) */}
         {isActive && (
           <div style={{ display: "grid", gridTemplateColumns: nextWeekPreview ? "1fr 1fr" : "1fr", gap: 8, marginBottom: 12 }}>
             <div style={{ background: "#161616", borderRadius: 8, padding: "10px 12px" }}>
@@ -159,14 +173,14 @@ export default function DashboardPage() {
         {isActive ? (
           <button
             onClick={() => handleStart(p.id)}
-            disabled={loading || !!activeLog}
+            disabled={starting || !!activeLog}
             style={{ background: "#e63946", color: "#fff", width: "100%", padding: "14px 0", fontSize: 16, fontWeight: 700, borderRadius: 10 }}
           >
-            {activeLog ? "Eerst actieve training afronden" : `Start ${nextSession.name}`}
+            {activeLog ? "Eerst actieve training afronden" : starting ? "Bezig..." : `Start ${nextSession.name}`}
           </button>
         ) : (
           <button
-            onClick={() => { setActiveProgram(p.id); load(); }}
+            onClick={() => handleActivateProgram(p.id)}
             style={{ background: "#161616", color: "#c0c0c0", width: "100%", padding: "11px 0", fontSize: 13, border: "1px solid #252525", borderRadius: 8, fontWeight: 600 }}
           >
             Activeer schema
@@ -178,7 +192,6 @@ export default function DashboardPage() {
 
   return (
     <div>
-      {/* Header */}
       <div style={{ marginBottom: 28, display: "flex", alignItems: "center", gap: 14 }}>
         <img src="/logo.png" alt="Rhino Performance" style={{ height: 52, width: 52, objectFit: "contain", flexShrink: 0 }} />
         <div>
@@ -190,7 +203,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Active training banner */}
       {activeLog && (
         <div style={{
           background: "linear-gradient(135deg, #1a0505 0%, #200808 100%)",
@@ -215,7 +227,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Empty state */}
       {programs.length === 0 && (
         <div style={{ background: "#0f0f0f", border: "1px dashed #252525", borderRadius: 14, padding: "40px 24px", textAlign: "center" }}>
           <div style={{ fontSize: 13, color: "#555", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 20 }}>Geen schema&apos;s</div>
@@ -235,7 +246,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Seed button — always visible as dev/demo helper */}
       {programs.length > 0 && (
         <div style={{ marginBottom: 16, textAlign: "right" }}>
           <button
@@ -247,7 +257,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Active program — primary */}
       {activeProgram && (
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#e63946", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
@@ -257,7 +266,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* No active program but programs exist */}
       {!activeProgram && programs.length > 0 && (
         <div style={{ background: "#0f0f0f", border: "1px dashed #e6394644", borderRadius: 12, padding: "16px 18px", marginBottom: 20, textAlign: "center" }}>
           <div style={{ fontSize: 13, color: "#555", marginBottom: 8 }}>Geen schema actief</div>
@@ -265,7 +273,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Inactive programs */}
       {inactivePrograms.length > 0 && (
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#333", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
@@ -279,7 +286,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Recent history */}
       {recentLogs.length > 0 && (
         <div style={{ marginTop: 8 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>

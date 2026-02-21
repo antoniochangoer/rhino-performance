@@ -7,6 +7,7 @@ import {
   addSession, deleteSession, updateSession,
   addExercise, deleteExercise, updateExercise,
   calcTargetWeight,
+  shareProgram, getSharedWith, unshareProgram,
 } from "@/lib/storage";
 import { searchExercises } from "@/lib/exercises";
 
@@ -19,14 +20,20 @@ export default function ProgramDetailPage({ params }) {
   const [newSessionName, setNewSessionName] = useState("");
   const [addingSession, setAddingSession] = useState(false);
   const [expandedSession, setExpandedSession] = useState(null);
-  const [addingExercise, setAddingExercise] = useState(null); // sessionId
+  const [addingExercise, setAddingExercise] = useState(null);
   const [exForm, setExForm] = useState({ name: "", sets: 3, targetReps: 5, targetRpe: 8, oneRepMax: "" });
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestionsRef = useRef(null);
 
-  function load() {
-    const p = getProgram(id);
+  // Sharing state
+  const [showShare, setShowShare] = useState(false);
+  const [shareInput, setShareInput] = useState("");
+  const [shareError, setShareError] = useState("");
+  const [sharedWith, setSharedWith] = useState([]);
+
+  async function load() {
+    const p = await getProgram(id);
     if (!p) { router.push("/programs"); return; }
     setProgram(p);
     setProgramName(p.name);
@@ -35,35 +42,43 @@ export default function ProgramDetailPage({ params }) {
     }
   }
 
-  useEffect(() => { load(); }, [id]);
-
-  function saveProgramName() {
-    if (!programName.trim()) return;
-    updateProgram(id, { name: programName.trim() });
-    setEditingName(false);
-    load();
+  async function loadShares() {
+    const shares = await getSharedWith(id);
+    setSharedWith(shares);
   }
 
-  function handleAddSession(e) {
+  useEffect(() => {
+    load();
+    loadShares();
+  }, [id]);
+
+  async function saveProgramName() {
+    if (!programName.trim()) return;
+    await updateProgram(id, { name: programName.trim() });
+    setEditingName(false);
+    await load();
+  }
+
+  async function handleAddSession(e) {
     e.preventDefault();
     if (!newSessionName.trim()) return;
-    const s = addSession(id, { name: newSessionName.trim() });
+    const s = await addSession(id, { name: newSessionName.trim() });
     setNewSessionName("");
     setAddingSession(false);
-    load();
-    setExpandedSession(s.id);
+    await load();
+    if (s) setExpandedSession(s.id);
   }
 
-  function handleDeleteSession(sessionId, name) {
+  async function handleDeleteSession(sessionId, name) {
     if (!confirm(`Weet je zeker dat je training "${name}" wilt verwijderen?\n\nAlle oefeningen in deze training worden ook verwijderd.`)) return;
-    deleteSession(id, sessionId);
-    load();
+    await deleteSession(id, sessionId);
+    await load();
   }
 
-  function handleAddExercise(e, sessionId) {
+  async function handleAddExercise(e, sessionId) {
     e.preventDefault();
     if (!exForm.name.trim()) return;
-    addExercise(id, sessionId, {
+    await addExercise(id, sessionId, {
       name: exForm.name.trim(),
       sets: exForm.sets,
       targetReps: exForm.targetReps,
@@ -72,18 +87,36 @@ export default function ProgramDetailPage({ params }) {
     });
     setExForm({ name: "", sets: 3, targetReps: 5, targetRpe: 8, oneRepMax: "" });
     setAddingExercise(null);
-    load();
+    await load();
   }
 
-  function handleDeleteExercise(sessionId, exerciseId, name) {
+  async function handleDeleteExercise(sessionId, exerciseId, name) {
     if (!confirm(`Weet je zeker dat je oefening "${name}" wilt verwijderen?`)) return;
-    deleteExercise(id, sessionId, exerciseId);
-    load();
+    await deleteExercise(id, sessionId, exerciseId);
+    await load();
   }
 
-  function handleUpdate1RM(sessionId, exerciseId, val) {
-    updateExercise(id, sessionId, exerciseId, { oneRepMax: Number(val) });
-    load();
+  async function handleUpdate1RM(sessionId, exerciseId, val) {
+    await updateExercise(id, sessionId, exerciseId, { oneRepMax: Number(val) });
+    await load();
+  }
+
+  async function handleShare(e) {
+    e.preventDefault();
+    if (!shareInput.trim()) return;
+    setShareError("");
+    const result = await shareProgram(id, shareInput.trim());
+    if (result.error) {
+      setShareError(result.error);
+    } else {
+      setShareInput("");
+      await loadShares();
+    }
+  }
+
+  async function handleUnshare(userId) {
+    await unshareProgram(id, userId);
+    await loadShares();
   }
 
   if (!program) return <div style={{ color: "#888", padding: 32, textAlign: "center" }}>Laden...</div>;
@@ -104,9 +137,50 @@ export default function ProgramDetailPage({ params }) {
             <button onClick={() => setEditingName(true)} style={{ background: "transparent", color: "#888", padding: "4px 8px", fontSize: 13, border: "1px solid #2a2a2a", borderRadius: 6 }}>
               Bewerk
             </button>
+            <button
+              onClick={() => { setShowShare((v) => !v); loadShares(); }}
+              style={{ background: showShare ? "#e63946" : "transparent", color: showShare ? "#fff" : "#888", padding: "4px 8px", fontSize: 13, border: "1px solid #2a2a2a", borderRadius: 6 }}
+            >
+              Deel
+            </button>
           </div>
         )}
       </div>
+
+      {/* Share panel */}
+      {showShare && (
+        <div style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 12, padding: 16, marginBottom: 20 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Schema delen</div>
+          <form onSubmit={handleShare} style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <input
+              value={shareInput}
+              onChange={(e) => setShareInput(e.target.value)}
+              placeholder="Gebruikersnaam van gym partner"
+              style={{ flex: 1 }}
+            />
+            <button type="submit" style={{ background: "#e63946", color: "#fff", padding: "8px 14px", fontSize: 14, flexShrink: 0 }}>
+              Delen
+            </button>
+          </form>
+          {shareError && (
+            <div style={{ color: "#e63946", fontSize: 13, marginBottom: 10 }}>{shareError}</div>
+          )}
+          {sharedWith.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, color: "#888", marginBottom: 6 }}>Gedeeld met:</div>
+              {sharedWith.map((u) => (
+                <div key={u.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid #1a1a1a" }}>
+                  <span style={{ fontSize: 14 }}>{u.username}</span>
+                  <button onClick={() => handleUnshare(u.id)} style={{ background: "transparent", color: "#444", fontSize: 16, padding: "2px 6px" }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {sharedWith.length === 0 && (
+            <div style={{ fontSize: 13, color: "#555" }}>Nog niet gedeeld met niemand.</div>
+          )}
+        </div>
+      )}
 
       {/* Sessions */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -207,16 +281,9 @@ export default function ProgramDetailPage({ params }) {
                       />
                       {showSuggestions && suggestions.length > 0 && (
                         <div style={{
-                          position: "absolute",
-                          top: "100%",
-                          left: 0,
-                          right: 0,
-                          background: "#222",
-                          border: "1px solid #3a3a3a",
-                          borderRadius: "0 0 8px 8px",
-                          zIndex: 50,
-                          overflow: "hidden",
-                          marginTop: 2,
+                          position: "absolute", top: "100%", left: 0, right: 0,
+                          background: "#222", border: "1px solid #3a3a3a",
+                          borderRadius: "0 0 8px 8px", zIndex: 50, overflow: "hidden", marginTop: 2,
                         }}>
                           {suggestions.map((name) => (
                             <button
@@ -229,16 +296,10 @@ export default function ProgramDetailPage({ params }) {
                                 setShowSuggestions(false);
                               }}
                               style={{
-                                display: "block",
-                                width: "100%",
-                                textAlign: "left",
-                                padding: "10px 14px",
-                                background: "transparent",
-                                color: "#f0f0f0",
-                                fontSize: 14,
-                                borderBottom: "1px solid #2a2a2a",
-                                borderRadius: 0,
-                                fontWeight: 400,
+                                display: "block", width: "100%", textAlign: "left",
+                                padding: "10px 14px", background: "transparent",
+                                color: "#f0f0f0", fontSize: 14,
+                                borderBottom: "1px solid #2a2a2a", borderRadius: 0, fontWeight: 400,
                               }}
                             >
                               {name}

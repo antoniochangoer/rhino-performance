@@ -54,16 +54,16 @@ export default function NewProgramPage() {
     setStep(3);
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    const p = createProgram({
+    const p = await createProgram({
       name: name.trim(),
       description: description.trim(),
       goal,
       totalWeeks: Number(totalWeeks),
       startRpe: Number(startRpe),
     });
-    router.push(`/programs/${p.id}`);
+    if (p) router.push(`/programs/${p.id}`);
   }
 
   // --- Step indicator ---

@@ -7,11 +7,17 @@ import { getLogs, getPrograms, deleteLog } from "@/lib/storage";
 export default function HistoryPage() {
   const [logs, setLogs] = useState([]);
   const [programs, setPrograms] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setLogs(getLogs().filter((l) => l.status === "completed"));
-    setPrograms(getPrograms());
-  }, []);
+  async function load() {
+    setLoading(true);
+    const [allLogs, allPrograms] = await Promise.all([getLogs(), getPrograms()]);
+    setLogs(allLogs.filter((l) => l.status === "completed"));
+    setPrograms(allPrograms);
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, []);
 
   function getProgramName(programId) {
     const p = programs.find((p) => p.id === programId);
@@ -32,10 +38,14 @@ export default function HistoryPage() {
     return vol > 0 ? vol.toLocaleString("nl") + " kg" : null;
   }
 
-  function handleDelete(id, name, date) {
+  async function handleDelete(id, name, date) {
     if (!confirm(`Weet je zeker dat je de training "${name}" van ${date} wilt verwijderen?\n\nDeze actie kan niet ongedaan worden gemaakt.`)) return;
-    deleteLog(id);
-    setLogs(getLogs().filter((l) => l.status === "completed"));
+    await deleteLog(id);
+    await load();
+  }
+
+  if (loading) {
+    return <div style={{ color: "#888", padding: 32, textAlign: "center" }}>Laden...</div>;
   }
 
   return (
@@ -79,7 +89,6 @@ export default function HistoryPage() {
                   </div>
                 </div>
               </Link>
-              {/* Delete button — outside the Link to avoid navigation */}
               <button
                 onClick={(e) => { e.preventDefault(); handleDelete(log.id, log.sessionName, log.date); }}
                 style={{

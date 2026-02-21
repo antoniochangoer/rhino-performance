@@ -6,20 +6,29 @@ import { getPrograms, deleteProgram, setActiveProgram } from "@/lib/storage";
 
 export default function ProgramsPage() {
   const [programs, setPrograms] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setPrograms(getPrograms());
-  }, []);
-
-  function handleDelete(id, name) {
-    if (!confirm(`Weet je zeker dat je schema "${name}" wilt verwijderen?\n\nDit verwijdert ook alle gekoppelde trainingen.`)) return;
-    deleteProgram(id);
-    setPrograms(getPrograms());
+  async function load() {
+    setLoading(true);
+    setPrograms(await getPrograms());
+    setLoading(false);
   }
 
-  function handleActivate(id) {
-    setActiveProgram(id);
-    setPrograms(getPrograms());
+  useEffect(() => { load(); }, []);
+
+  async function handleDelete(id, name) {
+    if (!confirm(`Weet je zeker dat je schema "${name}" wilt verwijderen?\n\nDit verwijdert ook alle gekoppelde trainingen.`)) return;
+    await deleteProgram(id);
+    await load();
+  }
+
+  async function handleActivate(id) {
+    await setActiveProgram(id);
+    await load();
+  }
+
+  if (loading) {
+    return <div style={{ color: "#888", padding: 32, textAlign: "center" }}>Laden...</div>;
   }
 
   return (
@@ -56,14 +65,12 @@ export default function ProgramsPage() {
               position: "relative",
               overflow: "hidden",
             }}>
-              {/* Active accent line */}
               {isActive && (
                 <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg, #e63946, #b8000f)" }} />
               )}
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ flex: 1, paddingTop: isActive ? 4 : 0 }}>
-                  {/* Name + active badge */}
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                     <div style={{ fontWeight: 700, fontSize: 16 }}>{p.name}</div>
                     {isActive && (
@@ -121,7 +128,6 @@ export default function ProgramsPage() {
                 </div>
               </div>
 
-              {/* Activate button — only when not already active */}
               {!isActive && (
                 <button
                   onClick={() => handleActivate(p.id)}

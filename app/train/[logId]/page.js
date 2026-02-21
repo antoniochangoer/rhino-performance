@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   getLog, getProgram, updateLog, completeLog,
   calcTargetWeight, calcE1RM, rpeColor, calcImpliedRpe,
-  generateWorkoutFeedback,
+  generateWorkoutFeedback, addExercise,
 } from "@/lib/storage";
 import { searchExercises } from "@/lib/exercises";
 
@@ -47,7 +47,6 @@ function AddExerciseModal({ onClose, onAdd }) {
         <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 16 }}>Oefening toevoegen</div>
 
         <form onSubmit={handleSubmit}>
-          {/* Name with autocomplete */}
           <div style={{ marginBottom: 12, position: "relative" }}>
             <label style={{ fontSize: 13, color: "#888", display: "block", marginBottom: 4 }}>Naam *</label>
             <input
@@ -79,7 +78,6 @@ function AddExerciseModal({ onClose, onAdd }) {
             )}
           </div>
 
-          {/* Sets / Reps / RPE row */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
             <div>
               <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>Sets</label>
@@ -95,13 +93,11 @@ function AddExerciseModal({ onClose, onAdd }) {
             </div>
           </div>
 
-          {/* 1RM */}
           <div style={{ marginBottom: 16 }}>
             <label style={{ fontSize: 13, color: "#888", display: "block", marginBottom: 4 }}>1RM (optioneel, voor gewicht berekening)</label>
             <input type="number" min="0" value={oneRepMax} onChange={(e) => setOneRepMax(e.target.value)} placeholder="kg" />
           </div>
 
-          {/* Permanent toggle */}
           <div style={{ marginBottom: 20 }}>
             <button
               type="button"
@@ -126,17 +122,10 @@ function AddExerciseModal({ onClose, onAdd }) {
           </div>
 
           <div style={{ display: "flex", gap: 10 }}>
-            <button
-              type="submit"
-              style={{ background: "#e63946", color: "#fff", flex: 1, padding: "14px 0", fontSize: 15, borderRadius: 10 }}
-            >
+            <button type="submit" style={{ background: "#e63946", color: "#fff", flex: 1, padding: "14px 0", fontSize: 15, borderRadius: 10 }}>
               Toevoegen
             </button>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{ background: "#2a2a2a", color: "#f0f0f0", flex: 1, padding: "14px 0", fontSize: 15, borderRadius: 10 }}
-            >
+            <button type="button" onClick={onClose} style={{ background: "#2a2a2a", color: "#f0f0f0", flex: 1, padding: "14px 0", fontSize: 15, borderRadius: 10 }}>
               Annuleer
             </button>
           </div>
@@ -160,7 +149,6 @@ function CompletionScreen({ log, feedback, program, onDone }) {
 
   return (
     <div style={{ paddingBottom: 32 }}>
-      {/* Banner */}
       <div style={{
         background: bg, border: `2px solid ${color}`, borderRadius: 14,
         padding: "20px 18px", marginBottom: 20,
@@ -174,7 +162,6 @@ function CompletionScreen({ log, feedback, program, onDone }) {
         )}
       </div>
 
-      {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
         <StatBox label="Datum" value={log.date} />
         <StatBox label="Sets afgerond" value={`${completedSets}/${totalSets}`} />
@@ -182,7 +169,6 @@ function CompletionScreen({ log, feedback, program, onDone }) {
         <StatBox label="Week" value={`${log.weekNumber || "—"}`} />
       </div>
 
-      {/* Per exercise e1RM */}
       <div style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 12, padding: "14px 16px", marginBottom: 24 }}>
         <div style={{ fontSize: 13, color: "#888", marginBottom: 10 }}>Beste e1RM per oefening</div>
         {log.exercises.map((ex) => {
@@ -229,11 +215,12 @@ export default function ActiveTrainingPage({ params }) {
   const router = useRouter();
   const [log, setLog] = useState(null);
   const [confirming, setConfirming] = useState(false);
-  const [completionData, setCompletionData] = useState(null); // { feedback, log, program }
+  const [completionData, setCompletionData] = useState(null);
   const [showAddExercise, setShowAddExercise] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  function load() {
-    const l = getLog(logId);
+  async function load() {
+    const l = await getLog(logId);
     if (!l) { router.push("/"); return; }
     l.exercises = l.exercises.map((ex) => {
       const targetWeight = calcTargetWeight(ex.oneRepMax, ex.targetReps, ex.targetRpe);
@@ -252,12 +239,13 @@ export default function ActiveTrainingPage({ params }) {
       };
     });
     setLog(l);
+    setLoading(false);
   }
 
   useEffect(() => { load(); }, [logId]);
 
-  function persistLog(updatedLog) {
-    updateLog(updatedLog.id, { exercises: updatedLog.exercises });
+  async function persistLog(updatedLog) {
+    await updateLog(updatedLog.id, { exercises: updatedLog.exercises });
     setLog({ ...updatedLog });
   }
 
@@ -301,7 +289,7 @@ export default function ActiveTrainingPage({ params }) {
     persistLog(updated);
   }
 
-  function handleAddExercise(exData, permanent) {
+  async function handleAddExercise(exData, permanent) {
     const updated = JSON.parse(JSON.stringify(log));
     const targetWeight = calcTargetWeight(exData.oneRepMax, exData.targetReps, exData.targetRpe);
     const w = targetWeight ? String(targetWeight) : "";
@@ -321,38 +309,29 @@ export default function ActiveTrainingPage({ params }) {
     };
 
     updated.exercises.push(newEx);
-    persistLog(updated);
+    await persistLog(updated);
 
-    // If permanent, also save to the program schema
     if (permanent && log.programId && log.sessionId) {
-      import("@/lib/storage").then(({ addExercise }) => {
-        addExercise(log.programId, log.sessionId, {
-          name: exData.name,
-          sets: exData.sets,
-          targetReps: exData.targetReps,
-          targetRpe: exData.targetRpe,
-          oneRepMax: exData.oneRepMax,
-        });
+      await addExercise(log.programId, log.sessionId, {
+        name: exData.name,
+        sets: exData.sets,
+        targetReps: exData.targetReps,
+        targetRpe: exData.targetRpe,
+        oneRepMax: exData.oneRepMax,
       });
     }
   }
 
-  function handleComplete() {
-    const program = log.programId ? getProgram(log.programId) : null;
-    const result = completeLog(logId);
-    const freshLog = getLog(logId);
-    const feedback = generateWorkoutFeedback(
-      freshLog,
-      result.weekCompleted,
-      result.newWeek,
-      program,
-    );
+  async function handleComplete() {
+    const program = log.programId ? await getProgram(log.programId) : null;
+    const result = await completeLog(logId);
+    const freshLog = await getLog(logId);
+    const feedback = generateWorkoutFeedback(freshLog, result.weekCompleted, result.newWeek, program);
     setCompletionData({ feedback, log: freshLog, program });
   }
 
-  if (!log) return <div style={{ color: "#888", padding: 32, textAlign: "center" }}>Laden...</div>;
+  if (loading || !log) return <div style={{ color: "#888", padding: 32, textAlign: "center" }}>Laden...</div>;
 
-  // Show completion screen
   if (completionData) {
     return (
       <div>
@@ -390,7 +369,6 @@ export default function ActiveTrainingPage({ params }) {
 
   return (
     <div>
-      {/* Header */}
       <div style={{
         display: "flex", alignItems: "center", gap: 12, marginBottom: 6,
         position: "sticky", top: 0, background: "#0a0a0a", zIndex: 10,
@@ -407,7 +385,6 @@ export default function ActiveTrainingPage({ params }) {
         </div>
       </div>
 
-      {/* Progress bar */}
       <div style={{ height: 3, background: "#2a2a2a", borderRadius: 2, marginBottom: 16, overflow: "hidden" }}>
         <div style={{
           height: "100%", background: "#2d9e47", borderRadius: 2,
@@ -416,7 +393,6 @@ export default function ActiveTrainingPage({ params }) {
         }} />
       </div>
 
-      {/* RPE legend */}
       <div style={{ display: "flex", gap: 12, marginBottom: 20, padding: "8px 12px", background: "#111", borderRadius: 8 }}>
         {[["green", "Op schema"], ["orange", "±1–1.5 RPE"], ["red", ">1.5 RPE"]].map(([color, label]) => (
           <div key={color} style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -426,7 +402,6 @@ export default function ActiveTrainingPage({ params }) {
         ))}
       </div>
 
-      {/* Exercises */}
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         {log.exercises.map((ex, exIdx) => {
           const targetWeight = calcTargetWeight(ex.oneRepMax, ex.targetReps, ex.targetRpe);
@@ -435,7 +410,6 @@ export default function ActiveTrainingPage({ params }) {
 
           return (
             <div key={ex.exerciseId} style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 14 }}>
-              {/* Exercise header */}
               <div style={{ padding: "14px 16px", borderBottom: "1px solid #2a2a2a" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                   <div style={{ fontWeight: 700, fontSize: 17 }}>{ex.name}</div>
@@ -451,7 +425,6 @@ export default function ActiveTrainingPage({ params }) {
                 </div>
               </div>
 
-              {/* Column headers */}
               <div style={{ display: "grid", gridTemplateColumns: "36px 28px 1fr 1fr 1fr 32px", gap: 5, padding: "8px 12px 4px", alignItems: "center" }}>
                 <div style={{ fontSize: 11, color: "#888", textAlign: "center" }}>✓</div>
                 <div style={{ fontSize: 11, color: "#888" }}>#</div>
@@ -461,7 +434,6 @@ export default function ActiveTrainingPage({ params }) {
                 <div />
               </div>
 
-              {/* Sets */}
               <div style={{ padding: "0 12px 14px" }}>
                 {ex.sets.map((s, setIdx) => {
                   const color = rpeColor(Number(s.rpe), ex.targetRpe);
@@ -525,14 +497,12 @@ export default function ActiveTrainingPage({ params }) {
                   );
                 })}
 
-                {/* Add set */}
                 <button onClick={() => addSet(exIdx)}
                   style={{ background: "#1a1a1a", color: "#888", width: "100%", padding: "10px 0", fontSize: 13, border: "1px dashed #2a2a2a", borderRadius: 8, marginTop: 4 }}
                 >
                   + Set toevoegen
                 </button>
 
-                {/* Weakling banner */}
                 {showWeakling && (
                   <div style={{ marginTop: 10, background: "#1a0000", border: "2px solid #e63946", borderRadius: 10, padding: "12px 14px" }}>
                     <div style={{ fontWeight: 800, fontSize: 15, color: "#e63946", marginBottom: 4, letterSpacing: 0.5 }}>⚠ WEAKLING ALERT</div>
@@ -548,7 +518,6 @@ export default function ActiveTrainingPage({ params }) {
         })}
       </div>
 
-      {/* Add exercise button */}
       <button
         onClick={() => setShowAddExercise(true)}
         style={{
@@ -559,7 +528,6 @@ export default function ActiveTrainingPage({ params }) {
         + Oefening toevoegen
       </button>
 
-      {/* Complete button */}
       <div style={{ marginTop: 20, paddingBottom: 8 }}>
         {!confirming ? (
           <button
@@ -588,7 +556,6 @@ export default function ActiveTrainingPage({ params }) {
         )}
       </div>
 
-      {/* Add exercise modal */}
       {showAddExercise && (
         <AddExerciseModal onClose={() => setShowAddExercise(false)} onAdd={handleAddExercise} />
       )}
