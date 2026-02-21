@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getPendingShareRequests } from "@/lib/storage";
+import { getSupabase } from "@/lib/supabase";
 
 const links = [
   {
@@ -67,10 +68,42 @@ export default function Nav() {
 
   useEffect(() => {
     if (pathname.startsWith("/auth")) return;
-    getPendingShareRequests()
-      .then((reqs) => setPendingCount(reqs.length))
-      .catch(() => {});
-  }, [pathname]);
+
+    const supabase = getSupabase();
+    let channel;
+
+    async function loadCount() {
+      const reqs = await getPendingShareRequests().catch(() => []);
+      setPendingCount(reqs.length);
+    }
+
+    async function setupRealtime() {
+      await loadCount();
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      channel = supabase
+        .channel("pending-shares-badge")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "program_shares",
+            filter: `shared_with=eq.${user.id}`,
+          },
+          () => loadCount()
+        )
+        .subscribe();
+    }
+
+    setupRealtime();
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, []);
 
   if (pathname.startsWith("/train/") || pathname.startsWith("/auth")) return null;
 

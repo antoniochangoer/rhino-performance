@@ -71,7 +71,7 @@ export default function ProgramsPage() {
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ flex: 1, paddingTop: isActive ? 4 : 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
                     <div style={{ fontWeight: 700, fontSize: 16 }}>{p.name}</div>
                     {isActive && (
                       <span style={{
@@ -84,7 +84,24 @@ export default function ProgramsPage() {
                         ACTIEF
                       </span>
                     )}
+                    {p.isShared && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+                        background: "#1a1a2e", color: "#7b8cde",
+                        border: "1px solid #2a2a5a",
+                        borderRadius: 4, padding: "2px 7px",
+                        fontFamily: "'Barlow Condensed', sans-serif",
+                        textTransform: "uppercase",
+                      }}>
+                        GEDEELD
+                      </span>
+                    )}
                   </div>
+                  {p.isShared && p.ownerUsername && (
+                    <div style={{ fontSize: 12, color: "#555", marginBottom: 4 }}>
+                      Van <span style={{ color: "#7b8cde", fontWeight: 600 }}>{p.ownerUsername}</span>
+                    </div>
+                  )}
 
                   {p.description && (
                     <div style={{ color: "#555", fontSize: 13, marginBottom: 6 }}>{p.description}</div>
@@ -116,15 +133,17 @@ export default function ProgramsPage() {
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                   <Link href={`/programs/${p.id}`}>
                     <button style={{ background: "#161616", color: "#c0c0c0", padding: "8px 12px", fontSize: 12, border: "1px solid #252525", fontWeight: 600 }}>
-                      Bewerk
+                      {p.isShared ? "Bekijk" : "Bewerk"}
                     </button>
                   </Link>
-                  <button
-                    onClick={() => handleDelete(p.id, p.name)}
-                    style={{ background: "transparent", color: "#444", padding: "8px 10px", fontSize: 18, lineHeight: 1 }}
-                  >
-                    ×
-                  </button>
+                  {!p.isShared && (
+                    <button
+                      onClick={() => handleDelete(p.id, p.name)}
+                      style={{ background: "transparent", color: "#444", padding: "8px 10px", fontSize: 18, lineHeight: 1 }}
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               </div>
 
