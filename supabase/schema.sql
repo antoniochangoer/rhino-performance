@@ -120,15 +120,19 @@ CREATE POLICY "Owner full access on programs"
   USING (auth.uid() = user_id);
 
 -- Programs: shared programs are readable
+-- Uses a SECURITY DEFINER function to avoid circular RLS between programs ↔ program_shares
+CREATE OR REPLACE FUNCTION public.is_program_shared_with_me(p_program_id UUID)
+RETURNS BOOLEAN LANGUAGE sql SECURITY DEFINER STABLE AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.program_shares
+    WHERE program_id = p_program_id
+      AND shared_with = auth.uid()
+  );
+$$;
+
 CREATE POLICY "Shared programs are readable"
   ON public.programs FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.program_shares ps
-      WHERE ps.program_id = programs.id
-        AND ps.shared_with = auth.uid()
-    )
-  );
+  USING (public.is_program_shared_with_me(id));
 
 -- Sessions: access via program ownership
 CREATE POLICY "Session access via program ownership"
