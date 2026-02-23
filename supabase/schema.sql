@@ -5,9 +5,10 @@
 
 -- ---- Profiles (extends auth.users) ----
 CREATE TABLE IF NOT EXISTS public.profiles (
-  id         UUID PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE,
-  username   TEXT UNIQUE,
-  created_at TIMESTAMPTZ DEFAULT now()
+  id              UUID PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE,
+  username        TEXT UNIQUE,
+  main_lifts_1rm  JSONB DEFAULT '{}',
+  created_at      TIMESTAMPTZ DEFAULT now()
 );
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -101,9 +102,14 @@ ALTER TABLE public.training_logs ENABLE ROW LEVEL SECURITY;
 -- ---- Program Shares ----
 -- Must be created BEFORE the RLS policies on programs/sessions/exercises that reference it
 CREATE TABLE IF NOT EXISTS public.program_shares (
-  program_id  UUID NOT NULL REFERENCES public.programs ON DELETE CASCADE,
-  shared_with UUID NOT NULL REFERENCES auth.users ON DELETE CASCADE,
-  created_at  TIMESTAMPTZ DEFAULT now(),
+  program_id    UUID NOT NULL REFERENCES public.programs ON DELETE CASCADE,
+  shared_with   UUID NOT NULL REFERENCES auth.users ON DELETE CASCADE,
+  owner_id      UUID REFERENCES auth.users ON DELETE CASCADE,
+  status        TEXT DEFAULT 'pending',
+  program_name  TEXT DEFAULT '',
+  program_goal  TEXT DEFAULT '',
+  program_weeks INT  DEFAULT 0,
+  created_at    TIMESTAMPTZ DEFAULT now(),
   PRIMARY KEY (program_id, shared_with)
 );
 
@@ -184,6 +190,21 @@ CREATE POLICY "Exercise readable via share"
 CREATE POLICY "Users can manage own logs"
   ON public.training_logs FOR ALL
   USING (auth.uid() = user_id);
+
+-- Training logs: gym partners can read each other's logs for shared programs
+CREATE POLICY "Partners can view shared program logs"
+  ON public.training_logs FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.program_shares ps
+      WHERE ps.program_id = training_logs.program_id
+        AND ps.status = 'accepted'
+        AND (
+          (ps.owner_id = auth.uid() AND ps.shared_with = training_logs.user_id)
+          OR (ps.shared_with = auth.uid() AND ps.owner_id = training_logs.user_id)
+        )
+    )
+  );
 
 -- Program shares: owner can manage
 CREATE POLICY "Owner can manage shares"

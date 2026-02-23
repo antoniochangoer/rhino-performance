@@ -3,15 +3,20 @@
 import { useState, useEffect } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend,
+  Tooltip, ResponsiveContainer,
 } from "recharts";
-import { getAllExerciseNames, getExerciseHistory } from "@/lib/storage";
+import {
+  getAllExerciseNames, getExerciseHistory,
+  getPartnerExerciseHistory, getPrograms,
+} from "@/lib/storage";
 
 const PERIODS = [
   { label: "4 weken", days: 28 },
   { label: "3 maanden", days: 91 },
   { label: "Alles", days: null },
 ];
+
+const PARTNER_COLORS = ["#f4a261", "#2a9d8f", "#a8dadc", "#e9c46a", "#48cae4"];
 
 function filterByPeriod(data, days) {
   if (!days) return data;
@@ -33,7 +38,7 @@ const CustomTooltip = ({ active, payload, label }) => {
       <div style={{ color: "#555", fontSize: 12, marginBottom: 6 }}>{label}</div>
       {payload.map((entry) => (
         <div key={entry.dataKey} style={{ color: entry.color, fontWeight: 700, fontSize: 15, marginBottom: 2 }}>
-          {entry.dataKey === "e1rm" ? "e1RM" : "Zwaarste set"}: {entry.value} kg
+          {entry.name}: {entry.value} kg
         </div>
       ))}
     </div>
@@ -47,12 +52,26 @@ export default function ProgressPage() {
   const [allData, setAllData] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Shared program context for partner lines
+  const [sharedProgramId, setSharedProgramId] = useState(null);
+  const [partnerSeries, setPartnerSeries] = useState([]);
+  const [partnerLoading, setPartnerLoading] = useState(false);
+
   useEffect(() => {
     async function load() {
       setLoading(true);
       const names = await getAllExerciseNames();
       setExercises(names);
       if (names.length > 0) setSelected(names[0]);
+
+      // Find the active shared program (or any shared program) for partner lines
+      const programs = await getPrograms();
+      const activeProgram = programs.find((p) => p.active);
+      const candidate = activeProgram || programs[0] || null;
+      if (candidate) {
+        setSharedProgramId(candidate.id);
+      }
+
       setLoading(false);
     }
     load();
@@ -67,12 +86,51 @@ export default function ProgressPage() {
     loadHistory();
   }, [selected]);
 
+  useEffect(() => {
+    async function loadPartnerData() {
+      if (!selected || !sharedProgramId) { setPartnerSeries([]); return; }
+      setPartnerLoading(true);
+      const series = await getPartnerExerciseHistory(selected, sharedProgramId);
+      setPartnerSeries(series || []);
+      setPartnerLoading(false);
+    }
+    loadPartnerData();
+  }, [selected, sharedProgramId]);
+
   if (loading) {
     return <div style={{ color: "#888", padding: 32, textAlign: "center" }}>Laden...</div>;
   }
 
   const data = filterByPeriod(allData, PERIODS[period].days);
   const chartData = data.map((d) => ({ ...d, label: formatDate(d.date) }));
+
+  // Merge partner data into chart entries by date label
+  const partnerByDate = {};
+  for (const partner of partnerSeries) {
+    const filtered = filterByPeriod(partner.data, PERIODS[period].days);
+    for (const entry of filtered) {
+      const label = formatDate(entry.date);
+      if (!partnerByDate[label]) partnerByDate[label] = {};
+      partnerByDate[label][`partner_${partner.partnerId}`] = entry.e1rm;
+    }
+  }
+
+  // Build merged chart data: combine own data + partner data by label
+  const allLabels = new Set([
+    ...chartData.map((d) => d.label),
+    ...Object.keys(partnerByDate),
+  ]);
+  const sortedLabels = Array.from(allLabels).sort((a, b) => {
+    // sort by original date string — reconstruct from own data or partner data
+    const aDate = data.find((d) => formatDate(d.date) === a)?.date || a;
+    const bDate = data.find((d) => formatDate(d.date) === b)?.date || b;
+    return aDate.localeCompare(bDate);
+  });
+
+  const mergedChartData = sortedLabels.map((label) => {
+    const own = chartData.find((d) => d.label === label) || {};
+    return { label, e1rm: own.e1rm || null, bestWeight: own.bestWeight || null, ...(partnerByDate[label] || {}) };
+  });
 
   const hasData = chartData.length > 0;
   const maxE1rm = hasData ? Math.max(...chartData.map((d) => d.e1rm)) : 0;
@@ -156,7 +214,7 @@ export default function ProgressPage() {
                 {selected}
               </div>
               <ResponsiveContainer width="100%" height={230}>
-                <LineChart data={chartData} margin={{ top: 5, right: 16, left: 0, bottom: 5 }}>
+                <LineChart data={mergedChartData} margin={{ top: 5, right: 16, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#161616" />
                   <XAxis
                     dataKey="label"
@@ -177,28 +235,56 @@ export default function ProgressPage() {
                     type="monotone" dataKey="e1rm" stroke="#e63946" strokeWidth={2.5}
                     dot={{ fill: "#e63946", r: 4, strokeWidth: 0 }}
                     activeDot={{ fill: "#fff", stroke: "#e63946", r: 6, strokeWidth: 2 }}
-                    name="e1RM"
+                    name="Jouw e1RM"
+                    connectNulls
                   />
                   <Line
                     type="monotone" dataKey="bestWeight" stroke="#c0c0c0" strokeWidth={2}
                     strokeDasharray="5 3"
                     dot={{ fill: "#c0c0c0", r: 3, strokeWidth: 0 }}
                     activeDot={{ fill: "#fff", stroke: "#c0c0c0", r: 5, strokeWidth: 2 }}
-                    name="bestWeight"
+                    name="Zwaarste set"
+                    connectNulls
                   />
+                  {partnerSeries.map((partner, idx) => (
+                    <Line
+                      key={partner.partnerId}
+                      type="monotone"
+                      dataKey={`partner_${partner.partnerId}`}
+                      stroke={PARTNER_COLORS[idx % PARTNER_COLORS.length]}
+                      strokeWidth={2}
+                      strokeDasharray="4 2"
+                      dot={{ fill: PARTNER_COLORS[idx % PARTNER_COLORS.length], r: 3, strokeWidth: 0 }}
+                      activeDot={{ fill: "#fff", stroke: PARTNER_COLORS[idx % PARTNER_COLORS.length], r: 5, strokeWidth: 2 }}
+                      name={partner.username}
+                      connectNulls
+                    />
+                  ))}
                 </LineChart>
               </ResponsiveContainer>
 
-              <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 12, paddingTop: 12, borderTop: "1px solid #161616" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "1px solid #161616" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <div style={{ width: 20, height: 3, background: "#e63946", borderRadius: 2 }} />
-                  <span style={{ fontSize: 12, color: "#888" }}>e1RM (berekend)</span>
+                  <span style={{ fontSize: 12, color: "#888" }}>Jouw e1RM</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <div style={{ width: 20, height: 3, background: "#c0c0c0", borderRadius: 2, opacity: 0.7 }} />
                   <span style={{ fontSize: 12, color: "#888" }}>Zwaarste set (kg)</span>
                 </div>
+                {partnerSeries.map((partner, idx) => (
+                  <div key={partner.partnerId} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ width: 20, height: 3, background: PARTNER_COLORS[idx % PARTNER_COLORS.length], borderRadius: 2 }} />
+                    <span style={{ fontSize: 12, color: "#888" }}>{partner.username}</span>
+                  </div>
+                ))}
               </div>
+            </div>
+          )}
+
+          {partnerLoading && (
+            <div style={{ textAlign: "center", color: "#555", fontSize: 13, marginTop: 12 }}>
+              Partner data laden...
             </div>
           )}
         </>

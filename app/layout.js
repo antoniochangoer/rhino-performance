@@ -1,5 +1,6 @@
 import "./globals.css";
 import Nav from "@/components/Nav";
+import Header from "@/components/Header";
 
 export const metadata = {
   title: "Rhino Performance",
@@ -16,7 +17,8 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-          <main style={{ flex: 1, padding: "16px 16px 80px" }}>
+          <Header />
+          <main style={{ flex: 1, padding: "72px 16px 80px" }}>
             {children}
           </main>
           <Nav />

@@ -2,9 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-import { getPendingShareRequests } from "@/lib/storage";
-import { getSupabase } from "@/lib/supabase";
 
 const links = [
   {
@@ -53,57 +50,8 @@ const links = [
   },
 ];
 
-function ProfileIcon({ active }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#e63946" : "#888"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  );
-}
-
 export default function Nav() {
   const pathname = usePathname();
-  const [pendingCount, setPendingCount] = useState(0);
-
-  useEffect(() => {
-    if (pathname.startsWith("/auth")) return;
-
-    const supabase = getSupabase();
-    let channel;
-
-    async function loadCount() {
-      const reqs = await getPendingShareRequests().catch(() => []);
-      setPendingCount(reqs.length);
-    }
-
-    async function setupRealtime() {
-      await loadCount();
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      channel = supabase
-        .channel("pending-shares-badge")
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "program_shares",
-            filter: `shared_with=eq.${user.id}`,
-          },
-          () => loadCount()
-        )
-        .subscribe();
-    }
-
-    setupRealtime();
-
-    return () => {
-      if (channel) supabase.removeChannel(channel);
-    };
-  }, []);
 
   if (pathname.startsWith("/train/") || pathname.startsWith("/auth")) return null;
 
@@ -146,38 +94,6 @@ export default function Nav() {
           </Link>
         );
       })}
-
-      {/* Profiel met badge */}
-      <Link href="/profile" style={{
-        display: "flex", flexDirection: "column", alignItems: "center",
-        gap: 4, padding: "4px 12px", position: "relative",
-      }}>
-        <div style={{ position: "relative" }}>
-          <ProfileIcon active={pathname.startsWith("/profile")} />
-          {pendingCount > 0 && (
-            <span style={{
-              position: "absolute", top: -3, right: -4,
-              background: "#e63946", color: "#fff",
-              borderRadius: "50%", width: 14, height: 14,
-              fontSize: 9, fontWeight: 800,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              border: "1.5px solid #0a0a0a",
-            }}>
-              {pendingCount > 9 ? "9+" : pendingCount}
-            </span>
-          )}
-        </div>
-        <span style={{
-          fontSize: 10,
-          color: pathname.startsWith("/profile") ? "#e63946" : "#555",
-          fontWeight: pathname.startsWith("/profile") ? 700 : 400,
-          letterSpacing: "0.04em",
-          textTransform: "uppercase",
-          fontFamily: "'Inter', sans-serif",
-        }}>
-          Profiel
-        </span>
-      </Link>
     </nav>
   );
 }

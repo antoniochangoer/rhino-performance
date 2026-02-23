@@ -8,6 +8,7 @@ import {
   addExercise, deleteExercise, updateExercise,
   calcTargetWeight,
   shareProgram, getSharedWith, unshareProgram,
+  getMainLifts1RM, getActiveLog,
 } from "@/lib/storage";
 import { searchExercises } from "@/lib/exercises";
 
@@ -32,6 +33,11 @@ export default function ProgramDetailPage({ params }) {
   const [shareError, setShareError] = useState("");
   const [sharedWith, setSharedWith] = useState([]);
 
+  // Main lifts 1RM from profile (for auto-fill)
+  const [profileLifts1RM, setProfileLifts1RM] = useState({});
+  // Whether there's an active log for this program (warn on 1RM edit)
+  const [hasActiveLog, setHasActiveLog] = useState(false);
+
   async function load() {
     const p = await getProgram(id);
     if (!p) { router.push("/programs"); return; }
@@ -50,6 +56,8 @@ export default function ProgramDetailPage({ params }) {
   useEffect(() => {
     load();
     loadShares();
+    getMainLifts1RM().then((lifts) => setProfileLifts1RM(lifts || {}));
+    getActiveLog().then((log) => setHasActiveLog(!!(log && log.programId === id)));
   }, [id]);
 
   async function saveProgramName() {
@@ -98,7 +106,21 @@ export default function ProgramDetailPage({ params }) {
 
   async function handleUpdate1RM(sessionId, exerciseId, val) {
     await updateExercise(id, sessionId, exerciseId, { oneRepMax: Number(val) });
+    // Refresh active log status after updating 1RM
+    getActiveLog().then((log) => setHasActiveLog(!!(log && log.programId === id)));
     await load();
+  }
+
+  // Resolve 1RM from profile when an exercise name is selected
+  function resolveProfileRM(exerciseName) {
+    const lower = exerciseName.toLowerCase();
+    if (lower.includes("squat")) return profileLifts1RM.squat || "";
+    if (lower.includes("bench")) return profileLifts1RM.bench || "";
+    if (lower.includes("deadlift")) return profileLifts1RM.deadlift || "";
+    if (lower.includes("overhead") || lower.includes("ohp") || lower.includes("press") && !lower.includes("bench")) {
+      return profileLifts1RM.ohp || "";
+    }
+    return "";
   }
 
   async function handleShare(e) {
@@ -249,6 +271,12 @@ export default function ProgramDetailPage({ params }) {
                             style={{ width: 80, padding: "6px 10px", fontSize: 14 }}
                           />
                         </div>
+                        {hasActiveLog && (
+                          <div style={{ fontSize: 11, color: "#e67e22", marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>
+                            <span>⚠</span>
+                            <span>Actieve sessie gevonden — 1RM wordt direct bijgewerkt in je lopende training.</span>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -263,7 +291,8 @@ export default function ProgramDetailPage({ params }) {
                         value={exForm.name}
                         onChange={(e) => {
                           const val = e.target.value;
-                          setExForm({ ...exForm, name: val });
+                          const autoRM = resolveProfileRM(val);
+                          setExForm({ ...exForm, name: val, oneRepMax: autoRM !== "" ? autoRM : exForm.oneRepMax });
                           setSuggestions(searchExercises(val));
                           setShowSuggestions(true);
                         }}
@@ -291,7 +320,8 @@ export default function ProgramDetailPage({ params }) {
                               type="button"
                               onMouseDown={(e) => {
                                 e.preventDefault();
-                                setExForm({ ...exForm, name });
+                                const autoRM = resolveProfileRM(name);
+                                setExForm({ ...exForm, name, oneRepMax: autoRM !== "" ? autoRM : exForm.oneRepMax });
                                 setSuggestions([]);
                                 setShowSuggestions(false);
                               }}
