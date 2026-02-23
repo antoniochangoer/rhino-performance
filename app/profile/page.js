@@ -20,8 +20,8 @@ export default function ProfilePage() {
   const [usernameSaved, setUsernameSaved] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
 
-  async function load() {
-    setLoading(true);
+  async function load(showSpinner = false) {
+    if (showSpinner) setLoading(true);
     const [p, gym, reqs] = await Promise.all([
       getProfile(),
       getGymPartners(),
@@ -30,10 +30,10 @@ export default function ProfilePage() {
     setProfile(p);
     setPartners(gym);
     setRequests(reqs);
-    setLoading(false);
+    if (showSpinner) setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(true); }, []);
 
   async function handleSaveUsername(e) {
     e.preventDefault();
@@ -46,21 +46,21 @@ export default function ProfilePage() {
       setUsernameSaved(true);
       setEditingUsername(false);
       setTimeout(() => setUsernameSaved(false), 2000);
-      await load();
+      await load(false);
     }
   }
 
   async function handleAccept(programId) {
     setActionLoading(programId + "_accept");
     await acceptShareRequest(programId);
-    await load();
+    await load(false);
     setActionLoading(null);
   }
 
   async function handleDecline(programId) {
     setActionLoading(programId + "_decline");
     await declineShareRequest(programId);
-    await load();
+    await load(false);
     setActionLoading(null);
   }
 
