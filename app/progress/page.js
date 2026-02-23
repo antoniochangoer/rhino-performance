@@ -7,7 +7,7 @@ import {
 } from "recharts";
 import {
   getAllExerciseNames, getExerciseHistory,
-  getPartnerExerciseHistory, getPrograms,
+  getPartnerExerciseHistory,
 } from "@/lib/storage";
 
 const PERIODS = [
@@ -52,8 +52,6 @@ export default function ProgressPage() {
   const [allData, setAllData] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Shared program context for partner lines
-  const [sharedProgramId, setSharedProgramId] = useState(null);
   const [partnerSeries, setPartnerSeries] = useState([]);
   const [partnerLoading, setPartnerLoading] = useState(false);
 
@@ -63,14 +61,6 @@ export default function ProgressPage() {
       const names = await getAllExerciseNames();
       setExercises(names);
       if (names.length > 0) setSelected(names[0]);
-
-      // Find the active program (or any program) for partner lines.
-      // Partner lines are shown for any program that was shared (shared_from set, or has accepted shares).
-      const programs = await getPrograms();
-      const activeProgram = programs.find((p) => p.active);
-      const candidate = activeProgram || programs[0] || null;
-      if (candidate) setSharedProgramId(candidate.id);
-
       setLoading(false);
     }
     load();
@@ -87,14 +77,14 @@ export default function ProgressPage() {
 
   useEffect(() => {
     async function loadPartnerData() {
-      if (!selected || !sharedProgramId) { setPartnerSeries([]); return; }
+      if (!selected) { setPartnerSeries([]); return; }
       setPartnerLoading(true);
-      const series = await getPartnerExerciseHistory(selected, sharedProgramId);
+      const series = await getPartnerExerciseHistory(selected);
       setPartnerSeries(series || []);
       setPartnerLoading(false);
     }
     loadPartnerData();
-  }, [selected, sharedProgramId]);
+  }, [selected]);
 
   if (loading) {
     return <div style={{ color: "#888", padding: 32, textAlign: "center" }}>Laden...</div>;
