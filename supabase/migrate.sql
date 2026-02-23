@@ -150,3 +150,100 @@ $$;
 
 -- Grant execute to authenticated users
 GRANT EXECUTE ON FUNCTION public.accept_share_and_copy(UUID, UUID) TO authenticated;
+
+-- ============================================================
+-- 6. RPC: get partner training logs for progress chart
+--    Given a program ID (own or copy), returns completed logs
+--    from all partners in the same share chain.
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.get_partner_logs(p_program_id UUID, p_user_id UUID)
+RETURNS TABLE (
+  log_id        UUID,
+  log_date      DATE,
+  exercises     JSONB,
+  partner_id    UUID,
+  partner_name  TEXT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_prog          RECORD;
+  v_original_id   UUID;
+  v_share         RECORD;
+  v_partner_name  TEXT;
+BEGIN
+  -- Load the program to determine if user is owner or recipient
+  SELECT * INTO v_prog FROM programs WHERE id = p_program_id;
+  IF NOT FOUND THEN RETURN; END IF;
+
+  IF v_prog.user_id = p_user_id THEN
+    -- I am the owner: find all accepted recipients via copy_program_id
+    FOR v_share IN
+      SELECT ps.shared_with, ps.copy_program_id
+      FROM program_shares ps
+      WHERE ps.program_id = p_program_id
+        AND ps.status = 'accepted'
+        AND ps.copy_program_id IS NOT NULL
+    LOOP
+      SELECT COALESCE(username, email, 'Partner') INTO v_partner_name
+      FROM profiles WHERE id = v_share.shared_with;
+
+      RETURN QUERY
+        SELECT tl.id, tl.date, tl.exercises, v_share.shared_with, v_partner_name
+        FROM training_logs tl
+        WHERE tl.program_id = v_share.copy_program_id
+          AND tl.user_id = v_share.shared_with
+          AND tl.status = 'completed'
+        ORDER BY tl.date;
+    END LOOP;
+
+  ELSIF v_prog.shared_from IS NOT NULL THEN
+    -- I am a recipient: look up the original program_id from program_shares
+    -- using copy_program_id = p_program_id (reliable, no name-matching needed)
+    SELECT ps.program_id INTO v_original_id
+    FROM program_shares ps
+    WHERE ps.copy_program_id = p_program_id
+      AND ps.shared_with = p_user_id
+    LIMIT 1;
+
+    IF v_original_id IS NOT NULL THEN
+      -- Owner's logs (they train on the original program_id)
+      SELECT COALESCE(pr.username, pr.email, 'Partner') INTO v_partner_name
+      FROM profiles pr WHERE pr.id = v_prog.shared_from;
+
+      RETURN QUERY
+        SELECT tl.id, tl.date, tl.exercises, v_prog.shared_from, v_partner_name
+        FROM training_logs tl
+        WHERE tl.program_id = v_original_id
+          AND tl.user_id = v_prog.shared_from
+          AND tl.status = 'completed'
+        ORDER BY tl.date;
+
+      -- Other recipients of the same original (their copy_program_id != mine)
+      FOR v_share IN
+        SELECT ps.shared_with, ps.copy_program_id
+        FROM program_shares ps
+        WHERE ps.program_id = v_original_id
+          AND ps.status = 'accepted'
+          AND ps.shared_with <> p_user_id
+          AND ps.copy_program_id IS NOT NULL
+      LOOP
+        SELECT COALESCE(pr.username, pr.email, 'Partner') INTO v_partner_name
+        FROM profiles pr WHERE pr.id = v_share.shared_with;
+
+        RETURN QUERY
+          SELECT tl.id, tl.date, tl.exercises, v_share.shared_with, v_partner_name
+          FROM training_logs tl
+          WHERE tl.program_id = v_share.copy_program_id
+            AND tl.user_id = v_share.shared_with
+            AND tl.status = 'completed'
+          ORDER BY tl.date;
+      END LOOP;
+    END IF;
+  END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_partner_logs(UUID, UUID) TO authenticated;

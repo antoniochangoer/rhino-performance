@@ -64,13 +64,12 @@ export default function ProgressPage() {
       setExercises(names);
       if (names.length > 0) setSelected(names[0]);
 
-      // Find the active shared program (or any shared program) for partner lines
+      // Find the active program (or any program) for partner lines.
+      // Partner lines are shown for any program that was shared (shared_from set, or has accepted shares).
       const programs = await getPrograms();
       const activeProgram = programs.find((p) => p.active);
       const candidate = activeProgram || programs[0] || null;
-      if (candidate) {
-        setSharedProgramId(candidate.id);
-      }
+      if (candidate) setSharedProgramId(candidate.id);
 
       setLoading(false);
     }
@@ -132,9 +131,11 @@ export default function ProgressPage() {
     return { label, e1rm: own.e1rm || null, bestWeight: own.bestWeight || null, ...(partnerByDate[label] || {}) };
   });
 
-  const hasData = chartData.length > 0;
-  const maxE1rm = hasData ? Math.max(...chartData.map((d) => d.e1rm)) : 0;
-  const minVal = hasData ? Math.min(...chartData.map((d) => Math.min(d.e1rm, d.bestWeight || d.e1rm))) : 0;
+  const hasOwnData = chartData.length > 0;
+  const hasPartnerData = partnerSeries.some((p) => p.data.length > 0);
+  const hasData = hasOwnData || hasPartnerData;
+  const maxE1rm = hasOwnData ? Math.max(...chartData.map((d) => d.e1rm)) : 0;
+  const minVal = hasOwnData ? Math.min(...chartData.map((d) => Math.min(d.e1rm, d.bestWeight || d.e1rm))) : 0;
   const trend = chartData.length >= 2
     ? chartData[chartData.length - 1].e1rm - chartData[0].e1rm
     : null;
@@ -184,7 +185,7 @@ export default function ProgressPage() {
             ))}
           </div>
 
-          {hasData && (
+          {hasOwnData && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 24 }}>
               {[
                 ["Beste e1RM", `${maxE1rm} kg`],
@@ -204,7 +205,7 @@ export default function ProgressPage() {
             </div>
           )}
 
-          {!hasData ? (
+          {!hasData && !partnerLoading ? (
             <div style={{ background: "#0f0f0f", border: "1px solid #252525", borderRadius: 12, padding: "40px 16px", textAlign: "center", color: "#555" }}>
               Geen data voor deze periode
             </div>
@@ -224,7 +225,7 @@ export default function ProgressPage() {
                     interval="preserveStartEnd"
                   />
                   <YAxis
-                    domain={[Math.max(0, minVal - 10), maxE1rm + 15]}
+                    domain={["auto", "auto"]}
                     tick={{ fill: "#444", fontSize: 11 }}
                     axisLine={{ stroke: "#252525" }}
                     tickLine={false}
