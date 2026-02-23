@@ -40,13 +40,16 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_share       RECORD;
-  v_source      RECORD;
-  v_owner_name  TEXT;
-  v_new_prog_id UUID;
-  v_new_sess_id UUID;
-  v_session     RECORD;
-  v_exercise    RECORD;
+  v_share         RECORD;
+  v_source        RECORD;
+  v_owner_name    TEXT;
+  v_new_prog_id   UUID;
+  v_new_sess_id   UUID;
+  v_session       RECORD;
+  v_exercise      RECORD;
+  v_lifts         JSONB;
+  v_ex_name_lower TEXT;
+  v_profile_orm   NUMERIC;
 BEGIN
   -- Load the share row
   SELECT * INTO v_share
@@ -66,6 +69,10 @@ BEGIN
   -- Get owner display name
   SELECT COALESCE(username, email, '—') INTO v_owner_name
   FROM profiles WHERE id = v_source.user_id;
+
+  -- Get recipient's saved main lifts 1RM from their profile
+  SELECT COALESCE(main_lifts_1rm, '{}') INTO v_lifts
+  FROM profiles WHERE id = p_recipient_id;
 
   -- Insert the program copy owned by the recipient
   INSERT INTO programs (
@@ -99,6 +106,22 @@ BEGIN
     FOR v_exercise IN
       SELECT * FROM exercises WHERE session_id = v_session.id ORDER BY position
     LOOP
+      -- Resolve 1RM: use recipient's profile value if it matches a main lift,
+      -- otherwise keep the source exercise value (0 / whatever the owner had)
+      v_ex_name_lower := lower(v_exercise.name);
+      v_profile_orm := NULL;
+
+      IF v_ex_name_lower LIKE '%deadlift%' THEN
+        v_profile_orm := (v_lifts->>'deadlift')::NUMERIC;
+      ELSIF v_ex_name_lower LIKE '%bench%' THEN
+        v_profile_orm := (v_lifts->>'bench')::NUMERIC;
+      ELSIF v_ex_name_lower LIKE '%squat%' THEN
+        v_profile_orm := (v_lifts->>'squat')::NUMERIC;
+      ELSIF v_ex_name_lower LIKE '%overhead%' OR v_ex_name_lower LIKE '%ohp%'
+            OR (v_ex_name_lower LIKE '%press%' AND v_ex_name_lower NOT LIKE '%bench%') THEN
+        v_profile_orm := (v_lifts->>'ohp')::NUMERIC;
+      END IF;
+
       INSERT INTO exercises (
         session_id, name, sets, target_reps, target_rpe,
         start_rpe, one_rep_max, position
@@ -110,7 +133,7 @@ BEGIN
         COALESCE(v_exercise.target_reps, 5),
         COALESCE(v_exercise.target_rpe, 7),
         COALESCE(v_exercise.start_rpe, 7),
-        COALESCE(v_exercise.one_rep_max, 0),
+        COALESCE(v_profile_orm, v_exercise.one_rep_max, 0),
         COALESCE(v_exercise.position, 0)
       );
     END LOOP;
