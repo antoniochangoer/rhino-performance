@@ -38,17 +38,19 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
 
 -- ---- Programs ----
 CREATE TABLE IF NOT EXISTS public.programs (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id       UUID NOT NULL REFERENCES auth.users ON DELETE CASCADE,
-  name          TEXT NOT NULL,
-  description   TEXT DEFAULT '',
-  goal          TEXT DEFAULT 'peaking',
-  total_weeks   INT  DEFAULT 8,
-  start_rpe     FLOAT DEFAULT 7,
-  current_index INT  DEFAULT 0,
-  current_week  INT  DEFAULT 1,
-  active        BOOLEAN DEFAULT false,
-  created_at    TIMESTAMPTZ DEFAULT now()
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id          UUID NOT NULL REFERENCES auth.users ON DELETE CASCADE,
+  name             TEXT NOT NULL,
+  description      TEXT DEFAULT '',
+  goal             TEXT DEFAULT 'peaking',
+  total_weeks      INT  DEFAULT 8,
+  start_rpe        FLOAT DEFAULT 7,
+  current_index    INT  DEFAULT 0,
+  current_week     INT  DEFAULT 1,
+  active           BOOLEAN DEFAULT false,
+  shared_from      UUID REFERENCES auth.users ON DELETE SET NULL,
+  shared_from_name TEXT DEFAULT NULL,
+  created_at       TIMESTAMPTZ DEFAULT now()
 );
 
 ALTER TABLE public.programs ENABLE ROW LEVEL SECURITY;
@@ -102,14 +104,15 @@ ALTER TABLE public.training_logs ENABLE ROW LEVEL SECURITY;
 -- ---- Program Shares ----
 -- Must be created BEFORE the RLS policies on programs/sessions/exercises that reference it
 CREATE TABLE IF NOT EXISTS public.program_shares (
-  program_id    UUID NOT NULL REFERENCES public.programs ON DELETE CASCADE,
-  shared_with   UUID NOT NULL REFERENCES auth.users ON DELETE CASCADE,
-  owner_id      UUID REFERENCES auth.users ON DELETE CASCADE,
-  status        TEXT DEFAULT 'pending',
-  program_name  TEXT DEFAULT '',
-  program_goal  TEXT DEFAULT '',
-  program_weeks INT  DEFAULT 0,
-  created_at    TIMESTAMPTZ DEFAULT now(),
+  program_id       UUID NOT NULL REFERENCES public.programs ON DELETE CASCADE,
+  shared_with      UUID NOT NULL REFERENCES auth.users ON DELETE CASCADE,
+  owner_id         UUID REFERENCES auth.users ON DELETE CASCADE,
+  status           TEXT DEFAULT 'pending',
+  program_name     TEXT DEFAULT '',
+  program_goal     TEXT DEFAULT '',
+  program_weeks    INT  DEFAULT 0,
+  copy_program_id  UUID REFERENCES public.programs ON DELETE SET NULL,
+  created_at       TIMESTAMPTZ DEFAULT now(),
   PRIMARY KEY (program_id, shared_with)
 );
 
@@ -185,6 +188,11 @@ CREATE POLICY "Exercise readable via share"
         AND ps.shared_with = auth.uid()
     )
   );
+
+-- Migration helpers (safe to run on existing DB)
+-- ALTER TABLE public.programs ADD COLUMN IF NOT EXISTS shared_from UUID REFERENCES auth.users ON DELETE SET NULL;
+-- ALTER TABLE public.programs ADD COLUMN IF NOT EXISTS shared_from_name TEXT DEFAULT NULL;
+-- ALTER TABLE public.program_shares ADD COLUMN IF NOT EXISTS copy_program_id UUID REFERENCES public.programs ON DELETE SET NULL;
 
 -- Training logs: users manage own logs only
 CREATE POLICY "Users can manage own logs"
