@@ -75,22 +75,29 @@ export default function Header() {
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
-      padding: "10px 16px",
+      padding: "8px 16px",
       zIndex: 100,
       boxSizing: "border-box",
     }}>
-      {/* Brand */}
-      <Link href="/" style={{ textDecoration: "none" }}>
-        <span style={{
-          fontFamily: "'Barlow Condensed', sans-serif",
-          fontWeight: 900,
-          fontSize: 20,
-          letterSpacing: "0.06em",
-          textTransform: "uppercase",
-          color: "#e63946",
-        }}>
-          RHINO
-        </span>
+      {/* Brand — logo + title on one line */}
+      <Link href="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 10 }}>
+        <img src="/logo.png" alt="Rhino" style={{ height: 34, width: 34, objectFit: "contain", flexShrink: 0 }} />
+        <div>
+          <div style={{
+            fontFamily: "'Barlow Condensed', sans-serif",
+            fontWeight: 900,
+            fontSize: 18,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            lineHeight: 1,
+            color: "#f0f0f0",
+          }}>
+            <span style={{ color: "#e63946" }}>Rhino</span>{" "}Performance
+          </div>
+          <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600, marginTop: 2 }}>
+            Kracht · RPE · Progressie
+          </div>
+        </div>
       </Link>
 
       {/* Profile icon with badge */}

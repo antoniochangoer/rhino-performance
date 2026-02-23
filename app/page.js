@@ -201,16 +201,6 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 28, display: "flex", alignItems: "center", gap: 14 }}>
-        <img src="/logo.png" alt="Rhino Performance" style={{ height: 52, width: 52, objectFit: "contain", flexShrink: 0 }} />
-        <div>
-          <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.04em", textTransform: "uppercase" }}>
-            <span style={{ color: "#e63946" }}>Rhino</span>{" "}
-            <span style={{ color: "#c0c0c0" }}>Performance</span>
-          </h1>
-          <p style={{ color: "#444", fontSize: 12, margin: "2px 0 0", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>Kracht · RPE · Progressie</p>
-        </div>
-      </div>
 
       {activeLog && (
         <div style={{

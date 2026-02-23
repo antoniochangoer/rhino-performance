@@ -18,7 +18,7 @@ export default function RootLayout({ children }) {
       <body>
         <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
           <Header />
-          <main style={{ flex: 1, padding: "72px 16px 80px" }}>
+          <main style={{ flex: 1, padding: "68px 16px 80px" }}>
             {children}
           </main>
           <Nav />
