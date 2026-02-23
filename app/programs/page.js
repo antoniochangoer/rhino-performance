@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { getPrograms, deleteProgram, setActiveProgram } from "@/lib/storage";
+import { getPrograms, deleteProgram, setActiveProgram, declineShareRequest } from "@/lib/storage";
 
 export default function ProgramsPage() {
   const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -16,9 +17,15 @@ export default function ProgramsPage() {
 
   useEffect(() => { load(); }, []);
 
-  async function handleDelete(id, name) {
-    if (!confirm(`Weet je zeker dat je schema "${name}" wilt verwijderen?\n\nDit verwijdert ook alle gekoppelde trainingen.`)) return;
+  async function handleDelete(id) {
     await deleteProgram(id);
+    setConfirmDeleteId(null);
+    await load();
+  }
+
+  async function handleLeave(id) {
+    await declineShareRequest(id);
+    setConfirmDeleteId(null);
     await load();
   }
 
@@ -130,19 +137,63 @@ export default function ProgramsPage() {
                   </div>
                 </div>
 
-                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
                   <Link href={`/programs/${p.id}`}>
                     <button style={{ background: "#161616", color: "#c0c0c0", padding: "8px 12px", fontSize: 12, border: "1px solid #252525", fontWeight: 600 }}>
                       {p.isShared ? "Bekijk" : "Bewerk"}
                     </button>
                   </Link>
-                  {!p.isShared && (
+
+                  {/* Own schema — delete */}
+                  {!p.isShared && confirmDeleteId !== p.id && (
                     <button
-                      onClick={() => handleDelete(p.id, p.name)}
-                      style={{ background: "transparent", color: "#444", padding: "8px 10px", fontSize: 18, lineHeight: 1 }}
+                      onClick={() => setConfirmDeleteId(p.id)}
+                      style={{ background: "#1a1a1a", color: "#e63946", padding: "8px 12px", fontSize: 12, border: "1px solid #3a1a1a", borderRadius: 8, fontWeight: 600 }}
                     >
-                      ×
+                      Verwijder
                     </button>
+                  )}
+                  {!p.isShared && confirmDeleteId === p.id && (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <button
+                        onClick={() => handleDelete(p.id)}
+                        style={{ background: "#e63946", color: "#fff", padding: "8px 12px", fontSize: 12, border: "none", borderRadius: 8, fontWeight: 700 }}
+                      >
+                        Ja, verwijder
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        style={{ background: "#2a2a2a", color: "#aaa", padding: "8px 10px", fontSize: 12, border: "none", borderRadius: 8, fontWeight: 600 }}
+                      >
+                        Annuleer
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Shared schema — leave */}
+                  {p.isShared && confirmDeleteId !== p.id && (
+                    <button
+                      onClick={() => setConfirmDeleteId(p.id)}
+                      style={{ background: "#1a1a1a", color: "#e63946", padding: "8px 12px", fontSize: 12, border: "1px solid #3a1a1a", borderRadius: 8, fontWeight: 600 }}
+                    >
+                      Verlaat
+                    </button>
+                  )}
+                  {p.isShared && confirmDeleteId === p.id && (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <button
+                        onClick={() => handleLeave(p.id)}
+                        style={{ background: "#e63946", color: "#fff", padding: "8px 12px", fontSize: 12, border: "none", borderRadius: 8, fontWeight: 700 }}
+                      >
+                        Ja, verlaat
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        style={{ background: "#2a2a2a", color: "#aaa", padding: "8px 10px", fontSize: 12, border: "none", borderRadius: 8, fontWeight: 600 }}
+                      >
+                        Annuleer
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
