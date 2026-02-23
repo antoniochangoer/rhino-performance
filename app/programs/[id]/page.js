@@ -114,10 +114,10 @@ export default function ProgramDetailPage({ params }) {
   // Resolve 1RM from profile when an exercise name is selected
   function resolveProfileRM(exerciseName) {
     const lower = exerciseName.toLowerCase();
-    if (lower.includes("squat")) return profileLifts1RM.squat || "";
-    if (lower.includes("bench")) return profileLifts1RM.bench || "";
     if (lower.includes("deadlift")) return profileLifts1RM.deadlift || "";
-    if (lower.includes("overhead") || lower.includes("ohp") || lower.includes("press") && !lower.includes("bench")) {
+    if (lower.includes("bench")) return profileLifts1RM.bench || "";
+    if (lower.includes("squat")) return profileLifts1RM.squat || "";
+    if (lower.includes("overhead press") || lower.includes("ohp") || (lower.includes("press") && !lower.includes("bench"))) {
       return profileLifts1RM.ohp || "";
     }
     return "";
@@ -292,7 +292,7 @@ export default function ProgramDetailPage({ params }) {
                         onChange={(e) => {
                           const val = e.target.value;
                           const autoRM = resolveProfileRM(val);
-                          setExForm({ ...exForm, name: val, oneRepMax: autoRM !== "" ? autoRM : exForm.oneRepMax });
+                          setExForm((prev) => ({ ...prev, name: val, oneRepMax: autoRM !== "" ? autoRM : prev.oneRepMax }));
                           setSuggestions(searchExercises(val));
                           setShowSuggestions(true);
                         }}
@@ -321,7 +321,7 @@ export default function ProgramDetailPage({ params }) {
                               onMouseDown={(e) => {
                                 e.preventDefault();
                                 const autoRM = resolveProfileRM(name);
-                                setExForm({ ...exForm, name, oneRepMax: autoRM !== "" ? autoRM : exForm.oneRepMax });
+                                setExForm((prev) => ({ ...prev, name, oneRepMax: autoRM !== "" ? autoRM : prev.oneRepMax }));
                                 setSuggestions([]);
                                 setShowSuggestions(false);
                               }}

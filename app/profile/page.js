@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   getProfile, updateUsername, getGymPartners,
   getPendingShareRequests, acceptShareRequest, declineShareRequest,
+  getMainLifts1RM, saveMainLifts1RM,
 } from "@/lib/storage";
 import { getSupabase } from "@/lib/supabase";
 
@@ -19,6 +20,8 @@ export default function ProfilePage() {
   const [usernameError, setUsernameError] = useState("");
   const [usernameSaved, setUsernameSaved] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
+  const [mainLifts, setMainLifts] = useState({ squat: "", bench: "", deadlift: "", ohp: "" });
+  const [mainLiftsSaved, setMainLiftsSaved] = useState(false);
 
   async function load(showSpinner = false) {
     if (showSpinner) setLoading(true);
@@ -33,7 +36,19 @@ export default function ProfilePage() {
     if (showSpinner) setLoading(false);
   }
 
-  useEffect(() => { load(true); }, []);
+  useEffect(() => {
+    load(true);
+    getMainLifts1RM().then((lifts) => {
+      if (lifts && Object.keys(lifts).length > 0) {
+        setMainLifts({
+          squat: lifts.squat || "",
+          bench: lifts.bench || "",
+          deadlift: lifts.deadlift || "",
+          ohp: lifts.ohp || "",
+        });
+      }
+    });
+  }, []);
 
   async function handleSaveUsername(e) {
     e.preventDefault();
@@ -62,6 +77,18 @@ export default function ProfilePage() {
     await declineShareRequest(programId);
     await load(false);
     setActionLoading(null);
+  }
+
+  async function handleSaveMainLifts(e) {
+    e.preventDefault();
+    const toSave = {};
+    if (mainLifts.squat && Number(mainLifts.squat) > 0) toSave.squat = Number(mainLifts.squat);
+    if (mainLifts.bench && Number(mainLifts.bench) > 0) toSave.bench = Number(mainLifts.bench);
+    if (mainLifts.deadlift && Number(mainLifts.deadlift) > 0) toSave.deadlift = Number(mainLifts.deadlift);
+    if (mainLifts.ohp && Number(mainLifts.ohp) > 0) toSave.ohp = Number(mainLifts.ohp);
+    await saveMainLifts1RM(toSave);
+    setMainLiftsSaved(true);
+    setTimeout(() => setMainLiftsSaved(false), 2000);
   }
 
   async function handleLogout() {
@@ -177,6 +204,53 @@ export default function ProfilePage() {
             Gym partners kunnen je vinden via je gebruikersnaam of e-mailadres.
           </div>
         </div>
+      </div>
+
+      {/* Main lifts 1RM */}
+      <div style={{ background: "#0f0f0f", border: "1px solid #252525", borderRadius: 12, padding: 16, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: "#555", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Main Lifts 1RM
+          </div>
+          {mainLiftsSaved && <span style={{ fontSize: 12, color: "#2d9e47", fontWeight: 600 }}>✓ Opgeslagen</span>}
+        </div>
+        <p style={{ fontSize: 12, color: "#444", marginBottom: 14, marginTop: 0 }}>
+          Wordt automatisch ingevuld als je deze oefeningen aan een dag toevoegt.
+        </p>
+        <form onSubmit={handleSaveMainLifts}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+            {[
+              { key: "squat", label: "Back Squat", icon: "🏋️" },
+              { key: "bench", label: "Bench Press", icon: "💪" },
+              { key: "deadlift", label: "Deadlift", icon: "⛓️" },
+              { key: "ohp", label: "Overhead Press", icon: "🔝" },
+            ].map((lift) => (
+              <div key={lift.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#111", borderRadius: 8, padding: "10px 14px" }}>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>
+                  <span style={{ marginRight: 8 }}>{lift.icon}</span>{lift.label}
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="2.5"
+                    value={mainLifts[lift.key]}
+                    onChange={(e) => setMainLifts((prev) => ({ ...prev, [lift.key]: e.target.value }))}
+                    placeholder="0"
+                    style={{ width: 80, padding: "7px 10px", fontSize: 14, textAlign: "right" }}
+                  />
+                  <span style={{ fontSize: 13, color: "#555", minWidth: 18 }}>kg</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <button
+            type="submit"
+            style={{ background: "#e63946", color: "#fff", width: "100%", padding: "11px 0", fontSize: 14, fontWeight: 700, borderRadius: 8 }}
+          >
+            Opslaan
+          </button>
+        </form>
       </div>
 
       {/* Gym partners */}

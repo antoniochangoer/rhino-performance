@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getPrograms, getActiveLog, startTraining, getLogs, calcWeeklyTargets, getNextWeekPreview, setActiveProgram } from "@/lib/storage";
+import { getPrograms, getActiveLog, startTraining, getLogs, calcWeeklyTargets, getNextWeekPreview, setActiveProgram, deleteLog } from "@/lib/storage";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -40,6 +40,12 @@ export default function DashboardPage() {
     await load();
   }
 
+  async function handleCancelLog() {
+    if (!activeLog) return;
+    await deleteLog(activeLog.id);
+    await load();
+  }
+
   async function handleSeed() {
     const { seedTestData } = await import("@/lib/seedData");
     await seedTestData();
@@ -50,6 +56,9 @@ export default function DashboardPage() {
     return <div style={{ color: "#888", padding: 32, textAlign: "center" }}>Laden...</div>;
   }
 
+  const activeLogProgramExists = activeLog
+    ? programs.some((p) => p.id === activeLog.programId)
+    : false;
   const activeProgram = programs.find((p) => p.active) || null;
   const inactivePrograms = programs.filter((p) => !p.active);
 
@@ -205,25 +214,49 @@ export default function DashboardPage() {
 
       {activeLog && (
         <div style={{
-          background: "linear-gradient(135deg, #1a0505 0%, #200808 100%)",
-          border: "1px solid #e63946",
+          background: activeLogProgramExists
+            ? "linear-gradient(135deg, #1a0505 0%, #200808 100%)"
+            : "#111",
+          border: `1px solid ${activeLogProgramExists ? "#e63946" : "#2a2a2a"}`,
           borderRadius: 14,
           padding: "16px 18px",
           marginBottom: 20,
         }}>
-          <div style={{ fontSize: 11, color: "#e63946", fontWeight: 700, letterSpacing: "0.1em", marginBottom: 6, textTransform: "uppercase" }}>
-            Actieve training
+          <div style={{ fontSize: 11, color: activeLogProgramExists ? "#e63946" : "#555", fontWeight: 700, letterSpacing: "0.1em", marginBottom: 6, textTransform: "uppercase" }}>
+            {activeLogProgramExists ? "Actieve training" : "Niet-gekoppelde training"}
           </div>
           <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>{activeLog.sessionName}</div>
           <div style={{ color: "#555", fontSize: 13, marginBottom: 14 }}>
             Gestart op {activeLog.date} · {activeLog.exercises.length} oefeningen
           </div>
-          <button
-            onClick={() => router.push(`/train/${activeLog.id}`)}
-            style={{ background: "#e63946", color: "#fff", width: "100%", padding: "14px 0", fontSize: 16, fontWeight: 700, borderRadius: 10 }}
-          >
-            Doorgaan met training →
-          </button>
+          {activeLogProgramExists ? (
+            <button
+              onClick={() => router.push(`/train/${activeLog.id}`)}
+              style={{ background: "#e63946", color: "#fff", width: "100%", padding: "14px 0", fontSize: 16, fontWeight: 700, borderRadius: 10 }}
+            >
+              Doorgaan met training →
+            </button>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontSize: 13, color: "#555", marginBottom: 4 }}>
+                Het schema van deze training bestaat niet meer.
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => router.push(`/train/${activeLog.id}`)}
+                  style={{ flex: 1, background: "#1a1a1a", color: "#c0c0c0", padding: "11px 0", fontSize: 13, border: "1px solid #252525", borderRadius: 8, fontWeight: 600 }}
+                >
+                  Toch doorgaan
+                </button>
+                <button
+                  onClick={handleCancelLog}
+                  style={{ flex: 1, background: "#e63946", color: "#fff", padding: "11px 0", fontSize: 13, borderRadius: 8, fontWeight: 700 }}
+                >
+                  Training annuleren
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
