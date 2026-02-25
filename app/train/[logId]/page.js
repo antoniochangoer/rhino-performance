@@ -8,6 +8,7 @@ import {
   generateWorkoutFeedback, addExercise,
 } from "@/lib/storage";
 import { searchExercises } from "@/lib/exercises";
+import { shouldShowRpeEarlyWarning } from "@/lib/rpe";
 
 function generateId() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -218,10 +219,17 @@ export default function ActiveTrainingPage({ params }) {
   const [completionData, setCompletionData] = useState(null);
   const [showAddExercise, setShowAddExercise] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [program, setProgram] = useState(null);
 
   async function load() {
     const l = await getLog(logId);
     if (!l) { router.push("/"); return; }
+    if (l.programId) {
+      const p = await getProgram(l.programId);
+      setProgram(p || null);
+    } else {
+      setProgram(null);
+    }
     l.exercises = l.exercises.map((ex) => {
       const targetWeight = calcTargetWeight(ex.oneRepMax, ex.targetReps, ex.targetRpe);
       return {
@@ -392,6 +400,20 @@ export default function ActiveTrainingPage({ params }) {
           transition: "width 0.3s",
         }} />
       </div>
+
+      {program && shouldShowRpeEarlyWarning(program) && (
+        <div style={{
+          background: "#2a2000",
+          border: "1px solid #e67e2244",
+          borderRadius: 10,
+          padding: "12px 14px",
+          marginBottom: 16,
+          fontSize: 13,
+          color: "#e6a022",
+        }}>
+          RPE is relatief hoog voor deze week in je peaking-blok; bouw geleidelijk op om beter te pieken.
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 12, marginBottom: 20, padding: "8px 12px", background: "#111", borderRadius: 8 }}>
         {[["green", "Op schema"], ["orange", "±1–1.5 RPE"], ["red", ">1.5 RPE"]].map(([color, label]) => (

@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   getProfile, updateUsername, getGymPartners,
   getPendingShareRequests, acceptShareRequest, declineShareRequest,
-  getMainLifts1RM, saveMainLifts1RM,
+  getMainLifts1RM, saveMainLifts1RM, updateProfileHR, getCardioActivities,
 } from "@/lib/storage";
 import { getSupabase } from "@/lib/supabase";
+import { getMaxHR, getKarvonenZones, ageFromBirthYear } from "@/lib/hrZones";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -22,6 +24,10 @@ export default function ProfilePage() {
   const [actionLoading, setActionLoading] = useState(null);
   const [mainLifts, setMainLifts] = useState({ squat: "", bench: "", deadlift: "", ohp: "" });
   const [mainLiftsSaved, setMainLiftsSaved] = useState(false);
+  const [birthYear, setBirthYear] = useState("");
+  const [restingHeartRate, setRestingHeartRate] = useState("");
+  const [hrSaved, setHrSaved] = useState(false);
+  const [cardioSummary, setCardioSummary] = useState({ aerobic: 0, anaerobic: 0 });
 
   async function load(showSpinner = false) {
     if (showSpinner) setLoading(true);
@@ -49,6 +55,27 @@ export default function ProfilePage() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (profile) {
+      setBirthYear(profile.birth_year ? String(profile.birth_year) : "");
+      setRestingHeartRate(profile.resting_heart_rate ? String(profile.resting_heart_rate) : "");
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    const from = new Date();
+    from.setDate(from.getDate() - 14);
+    getCardioActivities(from.toISOString().slice(0, 10), null).then((list) => {
+      let aerobic = 0;
+      let anaerobic = 0;
+      for (const a of list) {
+        if (a.type === "aerobic") aerobic += a.durationMinutes || 0;
+        else anaerobic += a.durationMinutes || 0;
+      }
+      setCardioSummary({ aerobic, anaerobic });
+    });
+  }, [profile]);
 
   async function handleSaveUsername(e) {
     e.preventDefault();
@@ -89,6 +116,18 @@ export default function ProfilePage() {
     await saveMainLifts1RM(toSave);
     setMainLiftsSaved(true);
     setTimeout(() => setMainLiftsSaved(false), 2000);
+  }
+
+  async function handleSaveHR(e) {
+    e.preventDefault();
+    const result = await updateProfileHR({
+      birthYear: birthYear ? Number(birthYear) : null,
+      restingHeartRate: restingHeartRate ? Number(restingHeartRate) : null,
+    });
+    if (result.error) return;
+    setHrSaved(true);
+    setTimeout(() => setHrSaved(false), 2000);
+    await load(false);
   }
 
   async function handleLogout() {
@@ -253,6 +292,71 @@ export default function ProfilePage() {
         </form>
       </div>
 
+      {/* Hartslagzones (Karvonen) */}
+      <div style={{ background: "#0f0f0f", border: "1px solid #252525", borderRadius: 12, padding: 16, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: "#555", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Hartslagzones
+          </div>
+          {hrSaved && <span style={{ fontSize: 12, color: "#2d9e47", fontWeight: 600 }}>✓ Opgeslagen</span>}
+        </div>
+        <p style={{ fontSize: 12, color: "#444", marginBottom: 14, marginTop: 0 }}>
+          Zones worden berekend met de Karvonen-formule (max HR: Tanaka).
+        </p>
+        <form onSubmit={handleSaveHR}>
+          <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 4 }}>Geboortejaar</label>
+              <input
+                type="number"
+                min="1920"
+                max={new Date().getFullYear()}
+                value={birthYear}
+                onChange={(e) => setBirthYear(e.target.value)}
+                placeholder="bijv. 1990"
+                style={{ width: "100%", padding: "9px 12px", fontSize: 14, background: "#111", border: "1px solid #252525", borderRadius: 8, color: "#f0f0f0" }}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 4 }}>Rustpols (bpm)</label>
+              <input
+                type="number"
+                min="40"
+                max="100"
+                value={restingHeartRate}
+                onChange={(e) => setRestingHeartRate(e.target.value)}
+                placeholder="bijv. 60"
+                style={{ width: "100%", padding: "9px 12px", fontSize: 14, background: "#111", border: "1px solid #252525", borderRadius: 8, color: "#f0f0f0" }}
+              />
+            </div>
+          </div>
+          <button
+            type="submit"
+            style={{ background: "#e63946", color: "#fff", width: "100%", padding: "10px 0", fontSize: 14, fontWeight: 700, borderRadius: 8 }}
+          >
+            Opslaan
+          </button>
+        </form>
+        {(() => {
+          const age = ageFromBirthYear(birthYear ? Number(birthYear) : null);
+          const maxHR = age != null ? getMaxHR(age) : null;
+          const restHR = restingHeartRate ? Number(restingHeartRate) : 70;
+          const zones = maxHR ? getKarvonenZones(restHR, maxHR) : [];
+          if (zones.length === 0) return null;
+          return (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #252525" }}>
+              <div style={{ fontSize: 12, color: "#555", marginBottom: 8 }}>Jouw zones</div>
+              {zones.map((z) => (
+                <div key={z.zone} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", fontSize: 13 }}>
+                  <span style={{ color: "#888" }}>Z{z.zone} · {z.label}</span>
+                  <span style={{ color: "#f0f0f0", fontWeight: 600 }}>{z.bpmMin}–{z.bpmMax} bpm</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+      </div>
+
       {/* Gym partners */}
       <div style={{ background: "#0f0f0f", border: "1px solid #252525", borderRadius: 12, padding: 16, marginBottom: 16 }}>
         <div style={{ fontSize: 11, color: "#555", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>
@@ -295,6 +399,35 @@ export default function ProfilePage() {
                 )}
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* Cardio overzicht */}
+      <div style={{ background: "#0f0f0f", border: "1px solid #252525", borderRadius: 12, padding: 16, marginBottom: 16 }}>
+        <div style={{ fontSize: 11, color: "#555", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>
+          Cardio (laatste 14 dagen)
+        </div>
+        {(cardioSummary.aerobic > 0 || cardioSummary.anaerobic > 0) ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 14, color: "#2d9e47" }}>Aeroob</span>
+              <span style={{ fontWeight: 700, color: "#f0f0f0" }}>{cardioSummary.aerobic} min</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 14, color: "#e67e22" }}>Anaeroob</span>
+              <span style={{ fontWeight: 700, color: "#f0f0f0" }}>{cardioSummary.anaerobic} min</span>
+            </div>
+            <Link href="/cardio" style={{ marginTop: 8 }}>
+              <span style={{ fontSize: 13, color: "#e63946", fontWeight: 600 }}>Bekijk & plan cardio →</span>
+            </Link>
+          </div>
+        ) : (
+          <div style={{ color: "#444", fontSize: 14, textAlign: "center", padding: "12px 0" }}>
+            <p style={{ marginBottom: 8 }}>Nog geen cardio gelogd.</p>
+            <Link href="/cardio">
+              <span style={{ fontSize: 13, color: "#e63946", fontWeight: 600 }}>Cardio toevoegen →</span>
+            </Link>
           </div>
         )}
       </div>

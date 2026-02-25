@@ -364,6 +364,20 @@ export default function NewProgramPage() {
           </div>
         )}
 
+        {goal === "peaking" && startRpe >= 8 && totalWeeks >= 8 && (
+          <div style={{
+            background: "#2a2000",
+            border: "1px solid #e67e2244",
+            borderRadius: 10,
+            padding: "12px 14px",
+            marginBottom: 24,
+            fontSize: 13,
+            color: "#e6a022",
+          }}>
+            Hoge start-RPE kan te zwaar zijn in de eerste weken.
+          </div>
+        )}
+
         <button
           type="submit"
           style={{ background: "#e63946", color: "#fff", width: "100%", padding: 16, fontSize: 16, borderRadius: 10 }}

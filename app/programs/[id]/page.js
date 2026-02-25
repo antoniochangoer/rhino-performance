@@ -11,6 +11,7 @@ import {
   getMainLifts1RM, getActiveLog,
 } from "@/lib/storage";
 import { searchExercises } from "@/lib/exercises";
+import { shouldShowRpeEarlyWarning } from "@/lib/rpe";
 
 export default function ProgramDetailPage({ params }) {
   const { id } = use(params);
@@ -201,6 +202,20 @@ export default function ProgramDetailPage({ params }) {
           {sharedWith.length === 0 && (
             <div style={{ fontSize: 13, color: "#555" }}>Nog niet gedeeld met niemand.</div>
           )}
+        </div>
+      )}
+
+      {shouldShowRpeEarlyWarning(program) && (
+        <div style={{
+          background: "#2a2000",
+          border: "1px solid #e67e2244",
+          borderRadius: 10,
+          padding: "12px 14px",
+          marginBottom: 16,
+          fontSize: 13,
+          color: "#e6a022",
+        }}>
+          RPE is relatief hoog voor deze week in je peaking-blok; bouw geleidelijk op om beter te pieken.
         </div>
       )}
 
