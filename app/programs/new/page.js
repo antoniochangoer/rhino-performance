@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createProgram, saveMainLifts1RM } from "@/lib/storage";
+import { createProgram } from "@/lib/storage";
 
 const GOAL_OPTIONS = [
   {
@@ -23,13 +23,6 @@ const GOAL_OPTIONS = [
   },
 ];
 
-const MAIN_LIFTS = [
-  { key: "squat", label: "Back Squat", icon: "🏋️" },
-  { key: "bench", label: "Bench Press", icon: "💪" },
-  { key: "deadlift", label: "Deadlift", icon: "⛓️" },
-  { key: "ohp", label: "Overhead Press", icon: "🔝" },
-];
-
 export default function NewProgramPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -41,15 +34,12 @@ export default function NewProgramPage() {
   // Step 2
   const [goal, setGoal] = useState("peaking");
 
-  // Step 2b — 1RM for main lifts (only shown for peaking)
-  const [mainLifts1RM, setMainLifts1RM] = useState({ squat: "", bench: "", deadlift: "", ohp: "" });
-
   // Step 3
   const [totalWeeks, setTotalWeeks] = useState(10);
   const [startRpe, setStartRpe] = useState(7);
 
   const selectedGoal = GOAL_OPTIONS.find((g) => g.id === goal);
-  const totalSteps = goal === "peaking" ? 4 : 3;
+  const totalSteps = 3;
 
   function goToStep2(e) {
     e.preventDefault();
@@ -62,30 +52,11 @@ export default function NewProgramPage() {
     setGoal(id);
     setTotalWeeks(g.defaultWeeks);
     setStartRpe(g.defaultRpe);
-    if (id === "peaking") {
-      setStep("2b");
-    } else {
-      setStep(3);
-    }
+    setStep(3);
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-
-    // Save main lifts 1RM to profile if filled in
-    if (goal === "peaking") {
-      const hasAny = Object.values(mainLifts1RM).some((v) => v && Number(v) > 0);
-      if (hasAny) {
-        const toSave = {};
-        for (const lift of MAIN_LIFTS) {
-          if (mainLifts1RM[lift.key] && Number(mainLifts1RM[lift.key]) > 0) {
-            toSave[lift.key] = Number(mainLifts1RM[lift.key]);
-          }
-        }
-        await saveMainLifts1RM(toSave);
-      }
-    }
-
     const p = await createProgram({
       name: name.trim(),
       description: description.trim(),
@@ -98,7 +69,6 @@ export default function NewProgramPage() {
 
   // --- Step indicator ---
   function StepDots() {
-    const currentStepNum = step === "2b" ? 3 : step === 3 ? (goal === "peaking" ? 4 : 3) : step;
     const dots = Array.from({ length: totalSteps }, (_, i) => i + 1);
     return (
       <div style={{ display: "flex", gap: 6, marginBottom: 24 }}>
@@ -106,10 +76,10 @@ export default function NewProgramPage() {
           <div
             key={n}
             style={{
-              width: n === currentStepNum ? 20 : 8,
+              width: n === step ? 20 : 8,
               height: 8,
               borderRadius: 4,
-              background: n === currentStepNum ? "#e63946" : n < currentStepNum ? "#4caf50" : "#2a2a2a",
+              background: n === step ? "#e63946" : n < step ? "#4caf50" : "#2a2a2a",
               transition: "all 0.2s",
             }}
           />
@@ -204,73 +174,16 @@ export default function NewProgramPage() {
     );
   }
 
-  // --- Step 2b: Main lifts 1RM (peaking only) ---
-  if (step === "2b") {
-    return (
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-          <button onClick={() => setStep(2)} style={{ background: "transparent", color: "#888", padding: "4px 0", fontSize: 22 }}>←</button>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Jouw 1RM</h1>
-        </div>
-        <StepDots />
-        <p style={{ color: "#888", fontSize: 14, marginBottom: 8 }}>Stap 3 — Vul je 1RM in voor de hoofdoefeningen</p>
-        <p style={{ color: "#555", fontSize: 13, marginBottom: 24, lineHeight: 1.5 }}>
-          Dit wordt gebruikt om automatisch je trainingsgewicht te berekenen op basis van RPE. Je kunt dit altijd later aanpassen per oefening.
-        </p>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 28 }}>
-          {MAIN_LIFTS.map((lift) => (
-            <div key={lift.key} style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 10, padding: "14px 16px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <span style={{ fontSize: 18, marginRight: 8 }}>{lift.icon}</span>
-                  <span style={{ fontWeight: 600, fontSize: 16 }}>{lift.label}</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <input
-                    type="number"
-                    min="0"
-                    step="2.5"
-                    value={mainLifts1RM[lift.key]}
-                    onChange={(e) => setMainLifts1RM((prev) => ({ ...prev, [lift.key]: e.target.value }))}
-                    placeholder="0"
-                    style={{ width: 90, padding: "8px 12px", fontSize: 15, textAlign: "right" }}
-                  />
-                  <span style={{ fontSize: 13, color: "#888", minWidth: 20 }}>kg</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setStep(3)}
-          style={{ background: "#e63946", color: "#fff", width: "100%", padding: 16, fontSize: 16, borderRadius: 10, marginBottom: 12 }}
-        >
-          Volgende →
-        </button>
-        <button
-          type="button"
-          onClick={() => { setMainLifts1RM({ squat: "", bench: "", deadlift: "", ohp: "" }); setStep(3); }}
-          style={{ background: "transparent", color: "#555", width: "100%", padding: 12, fontSize: 14, border: "1px solid #2a2a2a", borderRadius: 10 }}
-        >
-          Overslaan
-        </button>
-      </div>
-    );
-  }
-
   // --- Step 3: Weeks & start RPE ---
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-        <button onClick={() => setStep(goal === "peaking" ? "2b" : 2)} style={{ background: "transparent", color: "#888", padding: "4px 0", fontSize: 22 }}>←</button>
+        <button onClick={() => setStep(2)} style={{ background: "transparent", color: "#888", padding: "4px 0", fontSize: 22 }}>←</button>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Plannen</h1>
       </div>
       <StepDots />
       <p style={{ color: "#888", fontSize: 14, marginBottom: 24 }}>
-        {goal === "peaking" ? "Stap 4" : "Stap 3"} — Duur en start-intensiteit
+        Stap 3 — Duur en start-intensiteit
       </p>
 
       {/* Goal summary */}

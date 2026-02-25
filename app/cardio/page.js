@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   getCardioActivities,
   createCardioActivity,
+  updateCardioActivity,
   deleteCardioActivity,
 } from "@/lib/storage";
 import { searchCardioModalities, getCardioTypeLabel, CARDIO_TYPE_LABELS, CARDIO_TYPE_HINT } from "@/lib/cardio";
@@ -17,6 +18,7 @@ export default function CardioPage() {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({
     date: new Date().toISOString().slice(0, 10),
     name: "",
@@ -83,6 +85,49 @@ export default function CardioPage() {
     load();
   }, []);
 
+  function resetForm() {
+    setForm({
+      date: new Date().toISOString().slice(0, 10),
+      name: "",
+      inputMode: "duration",
+      durationMinutes: 30,
+      rounds: 5,
+      workIntervalMin: 2,
+      restIntervalMin: 2,
+      warmupMin: "",
+      cooldownMin: "",
+      type: "aerobic",
+      zone: "",
+      avgHr: "",
+      maxHr: "",
+      notes: "",
+    });
+    setEditingId(null);
+    setShowForm(false);
+    setSuggestions([]);
+  }
+
+  function startEdit(a) {
+    setEditingId(a.id);
+    setForm({
+      date: a.date,
+      name: a.name || "",
+      inputMode: (a.rounds != null && a.workIntervalMin != null) ? "rounds" : "duration",
+      durationMinutes: a.durationMinutes || 30,
+      rounds: a.rounds ?? 5,
+      workIntervalMin: a.workIntervalMin ?? 2,
+      restIntervalMin: a.restIntervalMin ?? 2,
+      warmupMin: a.warmupMin != null ? String(a.warmupMin) : "",
+      cooldownMin: a.cooldownMin != null ? String(a.cooldownMin) : "",
+      type: a.type || "aerobic",
+      zone: a.zone != null ? String(a.zone) : "",
+      avgHr: a.avgHr != null ? String(a.avgHr) : "",
+      maxHr: a.maxHr != null ? String(a.maxHr) : "",
+      notes: a.notes || "",
+    });
+    setShowForm(true);
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
@@ -101,6 +146,7 @@ export default function CardioPage() {
         alert("Vul werk- en rustduur in en minstens 1 ronde.");
         return;
       }
+      payload.durationMinutes = total;
       payload.rounds = Number(form.rounds) || undefined;
       payload.workIntervalMin = Number(form.workIntervalMin) || undefined;
       payload.restIntervalMin = Number(form.restIntervalMin) || undefined;
@@ -109,24 +155,12 @@ export default function CardioPage() {
     } else {
       payload.durationMinutes = Number(form.durationMinutes) || 0;
     }
-    await createCardioActivity(payload);
-    setForm({
-      date: new Date().toISOString().slice(0, 10),
-      name: "",
-      inputMode: "duration",
-      durationMinutes: 30,
-      rounds: 5,
-      workIntervalMin: 2,
-      restIntervalMin: 2,
-      warmupMin: "",
-      cooldownMin: "",
-      type: "aerobic",
-      zone: "",
-      avgHr: "",
-      maxHr: "",
-      notes: "",
-    });
-    setShowForm(false);
+    if (editingId) {
+      await updateCardioActivity(editingId, payload);
+    } else {
+      await createCardioActivity(payload);
+    }
+    resetForm();
     await load();
   }
 
@@ -156,7 +190,7 @@ export default function CardioPage() {
 
       {!showForm ? (
         <button
-          onClick={() => setShowForm(true)}
+          onClick={() => { setEditingId(null); setShowForm(true); }}
           style={{
             width: "100%",
             background: "#e63946",
@@ -181,6 +215,9 @@ export default function CardioPage() {
             marginBottom: 24,
           }}
         >
+          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>
+            {editingId ? "Cardio bewerken" : "Cardio toevoegen"}
+          </div>
           <div style={{ marginBottom: 12, position: "relative" }} ref={suggestionsRef}>
             <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 4 }}>Modaliteit *</label>
             <input
@@ -432,6 +469,9 @@ export default function CardioPage() {
               />
             </div>
           </div>
+          <p style={{ fontSize: 11, color: "#555", marginTop: -4, marginBottom: 12 }}>
+            Bij ingevoerde hartslag wordt zone en type bepaald door je profiel (Karvonen).
+          </p>
 
           <div style={{ marginBottom: 16 }}>
             <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 4 }}>Notities</label>
@@ -453,7 +493,7 @@ export default function CardioPage() {
             </button>
             <button
               type="button"
-              onClick={() => { setShowForm(false); setSuggestions([]); }}
+              onClick={resetForm}
               style={{ flex: 1, background: "#252525", color: "#888", padding: "12px 0", fontSize: 14, borderRadius: 8 }}
             >
               Annuleren
@@ -482,20 +522,21 @@ export default function CardioPage() {
                 position: "relative",
               }}
             >
-              <button
-                onClick={() => handleDelete(a.id)}
-                style={{
-                  position: "absolute",
-                  top: 14,
-                  right: 12,
-                  background: "transparent",
-                  color: "#555",
-                  fontSize: 18,
-                  padding: "2px 6px",
-                }}
-              >
-                ×
-              </button>
+              <div style={{ position: "absolute", top: 14, right: 12, display: "flex", alignItems: "center", gap: 4 }}>
+                <button
+                  type="button"
+                  onClick={() => startEdit(a)}
+                  style={{ background: "transparent", color: "#888", fontSize: 12, padding: "4px 8px", border: "1px solid #333", borderRadius: 6 }}
+                >
+                  Bewerk
+                </button>
+                <button
+                  onClick={() => handleDelete(a.id)}
+                  style={{ background: "transparent", color: "#555", fontSize: 18, padding: "2px 6px" }}
+                >
+                  ×
+                </button>
+              </div>
               <div style={{ fontWeight: 700, fontSize: 16 }}>{a.name}</div>
               <div style={{ fontSize: 13, color: "#888", marginTop: 2 }}>{formatDate(a.date)}</div>
               {roundsSummary(a) && (

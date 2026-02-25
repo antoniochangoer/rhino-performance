@@ -9,8 +9,7 @@ import {
   getMainLifts1RM, saveMainLifts1RM, updateProfileHR, getCardioActivities,
 } from "@/lib/storage";
 import { getSupabase } from "@/lib/supabase";
-import { getMaxHR, getKarvonenZones, ageFromBirthYear } from "@/lib/hrZones";
-import { getCardioTypeLabel } from "@/lib/cardio";
+import { getMaxHR, getKarvonenZones, ageFromBirthYear, ZONE_LABELS } from "@/lib/hrZones";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -28,7 +27,7 @@ export default function ProfilePage() {
   const [birthYear, setBirthYear] = useState("");
   const [restingHeartRate, setRestingHeartRate] = useState("");
   const [hrSaved, setHrSaved] = useState(false);
-  const [cardioSummary, setCardioSummary] = useState({ aerobic: 0, anaerobic: 0 });
+  const [cardioSummary, setCardioSummary] = useState({ z1: 0, z2: 0, z3: 0, z4: 0, z5: 0, noZone: 0 });
 
   async function load(showSpinner = false) {
     if (showSpinner) setLoading(true);
@@ -68,13 +67,13 @@ export default function ProfilePage() {
     const from = new Date();
     from.setDate(from.getDate() - 14);
     getCardioActivities(from.toISOString().slice(0, 10), null).then((list) => {
-      let aerobic = 0;
-      let anaerobic = 0;
+      const sum = { z1: 0, z2: 0, z3: 0, z4: 0, z5: 0, noZone: 0 };
       for (const a of list) {
-        if (a.type === "aerobic") aerobic += a.durationMinutes || 0;
-        else anaerobic += a.durationMinutes || 0;
+        const min = a.durationMinutes || 0;
+        if (a.zone >= 1 && a.zone <= 5) sum[`z${a.zone}`] += min;
+        else sum.noZone += min;
       }
-      setCardioSummary({ aerobic, anaerobic });
+      setCardioSummary(sum);
     });
   }, [profile]);
 
@@ -293,33 +292,64 @@ export default function ProfilePage() {
         </form>
       </div>
 
-      {/* Cardio overzicht - direct onder Main Lifts */}
+      {/* Cardio overzicht - direct onder Main Lifts (alle zones, HR-app stijl) */}
       <div style={{ background: "#0f0f0f", border: "1px solid #252525", borderRadius: 12, padding: 16, marginBottom: 16 }}>
         <div style={{ fontSize: 11, color: "#555", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>
           Cardio (laatste 14 dagen)
         </div>
-        {(cardioSummary.aerobic > 0 || cardioSummary.anaerobic > 0) ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 14, color: "#2d9e47" }}>{getCardioTypeLabel("aerobic")}</span>
-              <span style={{ fontWeight: 700, color: "#f0f0f0" }}>{cardioSummary.aerobic} min</span>
+        {(() => {
+          const zoneColors = {
+            1: { border: "#6b7280", bg: "rgba(107, 114, 128, 0.12)", label: "#9ca3af" },
+            2: { border: "#3b82f6", bg: "rgba(59, 130, 246, 0.12)", label: "#93c5fd" },
+            3: { border: "#22c55e", bg: "rgba(34, 197, 94, 0.12)", label: "#86efac" },
+            4: { border: "#f97316", bg: "rgba(249, 115, 22, 0.12)", label: "#fdba74" },
+            5: { border: "#ef4444", bg: "rgba(239, 68, 68, 0.12)", label: "#f87171" },
+          };
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {[1, 2, 3, 4, 5].map((z) => {
+                const min = cardioSummary[`z${z}`] ?? 0;
+                const colors = zoneColors[z];
+                return (
+                  <div
+                    key={z}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      fontSize: 13,
+                      padding: "8px 10px",
+                      borderRadius: 8,
+                      background: colors.bg,
+                      borderLeft: `4px solid ${colors.border}`,
+                    }}
+                  >
+                    <span style={{ color: colors.label, fontWeight: 600 }}>Z{z} · {ZONE_LABELS[z]}</span>
+                    <span style={{ fontWeight: 700, color: min > 0 ? "#f0f0f0" : "#555" }}>{min} min</span>
+                  </div>
+                );
+              })}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  fontSize: 13,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  background: "rgba(80, 80, 80, 0.1)",
+                  borderLeft: "4px solid #525252",
+                }}
+              >
+                <span style={{ color: "#737373" }}>Zonder zone</span>
+                <span style={{ fontWeight: 700, color: (cardioSummary.noZone ?? 0) > 0 ? "#f0f0f0" : "#555" }}>{cardioSummary.noZone ?? 0} min</span>
+              </div>
+              <Link href="/cardio" style={{ marginTop: 10, display: "block" }}>
+                <span style={{ fontSize: 13, color: "#e63946", fontWeight: 600 }}>Bekijk & plan cardio →</span>
+              </Link>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 14, color: "#e67e22" }}>{getCardioTypeLabel("anaerobic")}</span>
-              <span style={{ fontWeight: 700, color: "#f0f0f0" }}>{cardioSummary.anaerobic} min</span>
-            </div>
-            <Link href="/cardio" style={{ marginTop: 8 }}>
-              <span style={{ fontSize: 13, color: "#e63946", fontWeight: 600 }}>Bekijk & plan cardio →</span>
-            </Link>
-          </div>
-        ) : (
-          <div style={{ color: "#444", fontSize: 14, textAlign: "center", padding: "12px 0" }}>
-            <p style={{ marginBottom: 8 }}>Nog geen cardio gelogd.</p>
-            <Link href="/cardio">
-              <span style={{ fontSize: 13, color: "#e63946", fontWeight: 600 }}>Cardio toevoegen →</span>
-            </Link>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Hartslagzones (Karvonen) */}
@@ -431,6 +461,13 @@ export default function ProfilePage() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Traininghistorie (subtle link) */}
+      <div style={{ marginBottom: 16, textAlign: "center" }}>
+        <Link href="/history" style={{ fontSize: 13, color: "#555", textDecoration: "none" }}>
+          Traininghistorie →
+        </Link>
       </div>
 
       {/* Logout */}

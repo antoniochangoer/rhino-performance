@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   getLog, getProgram, updateLog, completeLog,
   calcTargetWeight, calcE1RM, rpeColor, calcImpliedRpe,
-  generateWorkoutFeedback, addExercise,
+  generateWorkoutFeedback, addExercise, getMainLifts1RM,
 } from "@/lib/storage";
 import { searchExercises } from "@/lib/exercises";
 import { shouldShowRpeEarlyWarning } from "@/lib/rpe";
@@ -16,13 +16,12 @@ function generateId() {
 
 const RPE_COLOR_MAP = { green: "#2d9e47", orange: "#e67e22", red: "#e63946" };
 
-// ---- Add Exercise Modal ----
-function AddExerciseModal({ onClose, onAdd }) {
+// ---- Add Exercise Modal (1RM from profile only) ----
+function AddExerciseModal({ onClose, onAdd, resolve1RM }) {
   const [name, setName] = useState("");
   const [sets, setSets] = useState(3);
   const [reps, setReps] = useState(5);
   const [rpe, setRpe] = useState(8);
-  const [oneRepMax, setOneRepMax] = useState("");
   const [permanent, setPermanent] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [showSugg, setShowSugg] = useState(false);
@@ -30,7 +29,8 @@ function AddExerciseModal({ onClose, onAdd }) {
   function handleSubmit(e) {
     e.preventDefault();
     if (!name.trim()) return;
-    onAdd({ name: name.trim(), sets, targetReps: reps, targetRpe: rpe, oneRepMax: Number(oneRepMax) || 0 }, permanent);
+    const oneRM = (typeof resolve1RM === "function" ? resolve1RM(name.trim()) : 0) || 0;
+    onAdd({ name: name.trim(), sets, targetReps: reps, targetRpe: rpe, oneRepMax: oneRM }, permanent);
     onClose();
   }
 
@@ -79,7 +79,7 @@ function AddExerciseModal({ onClose, onAdd }) {
             )}
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
             <div>
               <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>Sets</label>
               <input type="number" min="1" max="20" value={sets} onChange={(e) => setSets(Number(e.target.value))} style={{ textAlign: "center" }} />
@@ -93,11 +93,7 @@ function AddExerciseModal({ onClose, onAdd }) {
               <input type="number" min="5" max="10" step="0.5" value={rpe} onChange={(e) => setRpe(Number(e.target.value))} style={{ textAlign: "center" }} />
             </div>
           </div>
-
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ fontSize: 13, color: "#888", display: "block", marginBottom: 4 }}>1RM (optioneel, voor gewicht berekening)</label>
-            <input type="number" min="0" value={oneRepMax} onChange={(e) => setOneRepMax(e.target.value)} placeholder="kg" />
-          </div>
+          <p style={{ fontSize: 12, color: "#555", marginBottom: 16 }}>1RM komt uit je profiel (Main Lifts 1RM).</p>
 
           <div style={{ marginBottom: 20 }}>
             <button
@@ -220,6 +216,18 @@ export default function ActiveTrainingPage({ params }) {
   const [showAddExercise, setShowAddExercise] = useState(false);
   const [loading, setLoading] = useState(true);
   const [program, setProgram] = useState(null);
+  const [profileLifts1RM, setProfileLifts1RM] = useState({});
+
+  function resolve1RM(exerciseName) {
+    const lower = (exerciseName || "").toLowerCase();
+    if (lower.includes("deadlift")) return Number(profileLifts1RM.deadlift) || 0;
+    if (lower.includes("bench")) return Number(profileLifts1RM.bench) || 0;
+    if (lower.includes("squat")) return Number(profileLifts1RM.squat) || 0;
+    if (lower.includes("overhead press") || lower.includes("ohp") || (lower.includes("press") && !lower.includes("bench"))) {
+      return Number(profileLifts1RM.ohp) || 0;
+    }
+    return 0;
+  }
 
   async function load() {
     const l = await getLog(logId);
@@ -251,6 +259,9 @@ export default function ActiveTrainingPage({ params }) {
   }
 
   useEffect(() => { load(); }, [logId]);
+  useEffect(() => {
+    getMainLifts1RM().then(setProfileLifts1RM).catch(() => setProfileLifts1RM({}));
+  }, []);
 
   async function persistLog(updatedLog) {
     await updateLog(updatedLog.id, { exercises: updatedLog.exercises });
@@ -579,7 +590,7 @@ export default function ActiveTrainingPage({ params }) {
       </div>
 
       {showAddExercise && (
-        <AddExerciseModal onClose={() => setShowAddExercise(false)} onAdd={handleAddExercise} />
+        <AddExerciseModal onClose={() => setShowAddExercise(false)} onAdd={handleAddExercise} resolve1RM={resolve1RM} />
       )}
     </div>
   );

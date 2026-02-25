@@ -87,12 +87,13 @@ export default function ProgramDetailPage({ params }) {
   async function handleAddExercise(e, sessionId) {
     e.preventDefault();
     if (!exForm.name.trim()) return;
+    const oneRM = Number(resolveProfileRM(exForm.name)) || 0;
     await addExercise(id, sessionId, {
       name: exForm.name.trim(),
       sets: exForm.sets,
       targetReps: exForm.targetReps,
       targetRpe: exForm.targetRpe,
-      oneRepMax: exForm.oneRepMax,
+      oneRepMax: oneRM,
     });
     setExForm({ name: "", sets: 3, targetReps: 5, targetRpe: 8, oneRepMax: "" });
     setAddingExercise(null);
@@ -105,11 +106,11 @@ export default function ProgramDetailPage({ params }) {
     await load();
   }
 
-  async function handleUpdate1RM(sessionId, exerciseId, val) {
-    await updateExercise(id, sessionId, exerciseId, { oneRepMax: Number(val) });
-    // Refresh active log status after updating 1RM
-    getActiveLog().then((log) => setHasActiveLog(!!(log && log.programId === id)));
-    await load();
+  // 1RM: single source of truth = profile. Resolve for display and target weight.
+  function effectiveOneRepMax(ex) {
+    const fromProfile = resolveProfileRM(ex.name);
+    if (fromProfile !== "" && Number(fromProfile) > 0) return Number(fromProfile);
+    return ex.oneRepMax || 0;
   }
 
   // Resolve 1RM from profile when an exercise name is selected
@@ -254,7 +255,8 @@ export default function ProgramDetailPage({ params }) {
                 )}
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {session.exercises.map((ex) => {
-                    const targetWeight = calcTargetWeight(ex.oneRepMax, ex.targetReps, ex.targetRpe);
+                    const effectiveRM = effectiveOneRepMax(ex);
+                    const targetWeight = calcTargetWeight(effectiveRM, ex.targetReps, ex.targetRpe);
                     return (
                       <div key={ex.id} style={{ background: "#1a1a1a", borderRadius: 10, padding: "12px 14px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
@@ -268,30 +270,17 @@ export default function ProgramDetailPage({ params }) {
                                 Target: ~{targetWeight} kg
                               </div>
                             )}
+                            {effectiveRM > 0 && (
+                              <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
+                                1RM: {effectiveRM} kg {resolveProfileRM(ex.name) !== "" ? "(profiel)" : ""}
+                              </div>
+                            )}
                           </div>
                           <button
                             onClick={() => handleDeleteExercise(session.id, ex.id, ex.name)}
                             style={{ background: "transparent", color: "#888", padding: "2px 6px", fontSize: 16 }}
                           >×</button>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <label style={{ fontSize: 12, color: "#888", whiteSpace: "nowrap" }}>1RM (kg):</label>
-                          <input
-                            type="number"
-                            min="0"
-                            step="2.5"
-                            value={ex.oneRepMax || ""}
-                            onChange={(e) => handleUpdate1RM(session.id, ex.id, e.target.value)}
-                            placeholder="0"
-                            style={{ width: 80, padding: "6px 10px", fontSize: 14 }}
-                          />
-                        </div>
-                        {hasActiveLog && (
-                          <div style={{ fontSize: 11, color: "#e67e22", marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>
-                            <span>⚠</span>
-                            <span>Actieve sessie gevonden — 1RM wordt direct bijgewerkt in je lopende training.</span>
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -353,7 +342,8 @@ export default function ProgramDetailPage({ params }) {
                         </div>
                       )}
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                    <p style={{ fontSize: 12, color: "#555", marginBottom: 10 }}>1RM komt uit je profiel (Main Lifts 1RM).</p>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
                       <div>
                         <label style={{ fontSize: 13, color: "#888", display: "block", marginBottom: 4 }}>Sets</label>
                         <input type="number" min="1" max="20" value={exForm.sets} onChange={(e) => setExForm({ ...exForm, sets: e.target.value })} />
@@ -365,10 +355,6 @@ export default function ProgramDetailPage({ params }) {
                       <div>
                         <label style={{ fontSize: 13, color: "#888", display: "block", marginBottom: 4 }}>Target RPE</label>
                         <input type="number" min="6" max="10" step="0.5" value={exForm.targetRpe} onChange={(e) => setExForm({ ...exForm, targetRpe: e.target.value })} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: 13, color: "#888", display: "block", marginBottom: 4 }}>1RM (kg)</label>
-                        <input type="number" min="0" step="2.5" value={exForm.oneRepMax} onChange={(e) => setExForm({ ...exForm, oneRepMax: e.target.value })} placeholder="optioneel" />
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
