@@ -34,9 +34,7 @@ const links = [
     label: "Progressie",
     icon: (active) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#e63946" : "#888"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="4" y1="18" x2="4" y2="22" />
-        <line x1="4" y1="22" x2="22" y2="22" />
-        <polyline points="4 16 10 12 16 8 22 4" />
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
       </svg>
     ),
   },

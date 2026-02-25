@@ -229,25 +229,44 @@ export default function ActiveTrainingPage({ params }) {
     return 0;
   }
 
+  function effectiveOneRepMax(ex) {
+    const fromProfile = resolve1RM(ex.name);
+    if (fromProfile > 0) return fromProfile;
+    return Number(ex.oneRepMax) || 0;
+  }
+
   async function load() {
-    const l = await getLog(logId);
+    const [l, profile1RM] = await Promise.all([getLog(logId), getMainLifts1RM()]);
     if (!l) { router.push("/"); return; }
+    setProfileLifts1RM(profile1RM || {});
     if (l.programId) {
       const p = await getProgram(l.programId);
       setProgram(p || null);
     } else {
       setProgram(null);
     }
+    const lifts = profile1RM || {};
+    function effectiveRM(ex) {
+      const lower = (ex.name || "").toLowerCase();
+      if (lower.includes("deadlift")) return Number(lifts.deadlift) || ex.oneRepMax || 0;
+      if (lower.includes("bench")) return Number(lifts.bench) || ex.oneRepMax || 0;
+      if (lower.includes("squat")) return Number(lifts.squat) || ex.oneRepMax || 0;
+      if (lower.includes("overhead press") || lower.includes("ohp") || (lower.includes("press") && !lower.includes("bench"))) {
+        return Number(lifts.ohp) || ex.oneRepMax || 0;
+      }
+      return Number(ex.oneRepMax) || 0;
+    }
     l.exercises = l.exercises.map((ex) => {
-      const targetWeight = calcTargetWeight(ex.oneRepMax, ex.targetReps, ex.targetRpe);
+      const oneRM = effectiveRM(ex);
+      const targetWeight = calcTargetWeight(oneRM, ex.targetReps, ex.targetRpe);
       return {
         ...ex,
         sets: ex.sets.map((s) => {
           const s2 = { completed: false, ...s };
           if (!s2.weight && targetWeight) s2.weight = String(targetWeight);
           if (!s2.reps) s2.reps = String(ex.targetReps);
-          if (!s2.rpe && s2.weight && s2.reps && ex.oneRepMax > 0) {
-            const implied = calcImpliedRpe(s2.weight, s2.reps, ex.oneRepMax);
+          if (!s2.rpe && s2.weight && s2.reps && oneRM > 0) {
+            const implied = calcImpliedRpe(s2.weight, s2.reps, oneRM);
             if (implied !== null) s2.rpe = String(implied);
           }
           return s2;
@@ -259,9 +278,6 @@ export default function ActiveTrainingPage({ params }) {
   }
 
   useEffect(() => { load(); }, [logId]);
-  useEffect(() => {
-    getMainLifts1RM().then(setProfileLifts1RM).catch(() => setProfileLifts1RM({}));
-  }, []);
 
   async function persistLog(updatedLog) {
     await updateLog(updatedLog.id, { exercises: updatedLog.exercises });
@@ -273,12 +289,13 @@ export default function ActiveTrainingPage({ params }) {
     const ex = updated.exercises[exIdx];
     const s = ex.sets[setIdx];
     s[field] = value;
+    const oneRM = effectiveOneRepMax(ex);
 
-    if ((field === "weight" || field === "reps") && ex.oneRepMax > 0) {
+    if ((field === "weight" || field === "reps") && oneRM > 0) {
       const w = field === "weight" ? value : s.weight;
       const r = field === "reps" ? value : s.reps;
       if (w && r) {
-        const implied = calcImpliedRpe(w, r, ex.oneRepMax);
+        const implied = calcImpliedRpe(w, r, oneRM);
         if (implied !== null) s.rpe = String(implied);
       }
     }
@@ -437,7 +454,8 @@ export default function ActiveTrainingPage({ params }) {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         {log.exercises.map((ex, exIdx) => {
-          const targetWeight = calcTargetWeight(ex.oneRepMax, ex.targetReps, ex.targetRpe);
+          const oneRM = effectiveOneRepMax(ex);
+          const targetWeight = calcTargetWeight(oneRM, ex.targetReps, ex.targetRpe);
           const lowRpeSets = ex.sets.filter((s) => s.rpe !== "" && (ex.targetRpe - Number(s.rpe)) >= 2);
           const showWeakling = lowRpeSets.length > 0;
 
@@ -454,7 +472,7 @@ export default function ActiveTrainingPage({ params }) {
                   <div style={{ fontSize: 13, color: "#888" }}>{ex.sets.length} sets × {ex.targetReps} reps</div>
                   <div style={{ fontSize: 13, color: "#888" }}>Target RPE: <span style={{ color: "#f0f0f0", fontWeight: 600 }}>{ex.targetRpe}</span></div>
                   {targetWeight && <div style={{ fontSize: 13, color: "#e63946", fontWeight: 600 }}>~{targetWeight} kg</div>}
-                  {ex.oneRepMax > 0 && <div style={{ fontSize: 13, color: "#888" }}>1RM: {ex.oneRepMax} kg</div>}
+                  {oneRM > 0 && <div style={{ fontSize: 13, color: "#888" }}>1RM: {oneRM} kg</div>}
                 </div>
               </div>
 
@@ -523,7 +541,7 @@ export default function ActiveTrainingPage({ params }) {
                       {e1rm && (
                         <div style={{ fontSize: 11, color: "#888", paddingLeft: 70, marginTop: 2 }}>
                           e1RM: ~{e1rm} kg
-                          {ex.oneRepMax > 0 && s.rpe && <span style={{ marginLeft: 8, color: "#666" }}>· RPE auto</span>}
+                          {oneRM > 0 && s.rpe && <span style={{ marginLeft: 8, color: "#666" }}>· RPE auto</span>}
                         </div>
                       )}
                     </div>
