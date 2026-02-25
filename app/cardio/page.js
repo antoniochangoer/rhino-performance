@@ -6,7 +6,7 @@ import {
   createCardioActivity,
   deleteCardioActivity,
 } from "@/lib/storage";
-import { searchCardioModalities } from "@/lib/cardio";
+import { searchCardioModalities, getCardioTypeLabel, CARDIO_TYPE_LABELS, CARDIO_TYPE_HINT } from "@/lib/cardio";
 
 function formatDate(dateStr) {
   const d = new Date(dateStr + "T00:00:00");
@@ -20,7 +20,13 @@ export default function CardioPage() {
   const [form, setForm] = useState({
     date: new Date().toISOString().slice(0, 10),
     name: "",
+    inputMode: "duration", // "duration" | "rounds"
     durationMinutes: 30,
+    rounds: 5,
+    workIntervalMin: 2,
+    restIntervalMin: 2,
+    warmupMin: "",
+    cooldownMin: "",
     type: "aerobic",
     zone: "",
     avgHr: "",
@@ -30,6 +36,29 @@ export default function CardioPage() {
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestionsRef = useRef(null);
+
+  function computedRoundsTotal() {
+    const r = Number(form.rounds) || 0;
+    const w = Number(form.workIntervalMin) || 0;
+    const rest = Number(form.restIntervalMin) || 0;
+    const warm = Number(form.warmupMin) || 0;
+    const cool = Number(form.cooldownMin) || 0;
+    if (r < 1 || (w === 0 && rest === 0)) return null;
+    return warm + r * (w + rest) + cool;
+  }
+
+  function roundsSummary(a) {
+    if (a.rounds == null || a.workIntervalMin == null) return null;
+    const work = a.workIntervalMin ?? 0;
+    const rest = a.restIntervalMin ?? 0;
+    const warm = a.warmupMin ?? 0;
+    const cool = a.cooldownMin ?? 0;
+    const parts = [];
+    if (warm > 0) parts.push(`${warm} warm-up`);
+    parts.push(`${a.rounds}× (${work}+${rest})`);
+    if (cool > 0) parts.push(`${cool} cool-down`);
+    return parts.join(" · ");
+  }
 
   function getDateRange() {
     const to = new Date();
@@ -57,20 +86,40 @@ export default function CardioPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
-    await createCardioActivity({
+    const payload = {
       date: form.date,
       name: form.name.trim(),
-      durationMinutes: Number(form.durationMinutes) || 0,
       type: form.type,
       zone: form.zone ? Number(form.zone) : undefined,
       avgHr: form.avgHr ? Number(form.avgHr) : undefined,
       maxHr: form.maxHr ? Number(form.maxHr) : undefined,
       notes: form.notes.trim() || undefined,
-    });
+    };
+    if (form.inputMode === "rounds") {
+      const total = computedRoundsTotal();
+      if (total == null || total < 1) {
+        alert("Vul werk- en rustduur in en minstens 1 ronde.");
+        return;
+      }
+      payload.rounds = Number(form.rounds) || undefined;
+      payload.workIntervalMin = Number(form.workIntervalMin) || undefined;
+      payload.restIntervalMin = Number(form.restIntervalMin) || undefined;
+      payload.warmupMin = form.warmupMin !== "" ? Number(form.warmupMin) : undefined;
+      payload.cooldownMin = form.cooldownMin !== "" ? Number(form.cooldownMin) : undefined;
+    } else {
+      payload.durationMinutes = Number(form.durationMinutes) || 0;
+    }
+    await createCardioActivity(payload);
     setForm({
       date: new Date().toISOString().slice(0, 10),
       name: "",
+      inputMode: "duration",
       durationMinutes: 30,
+      rounds: 5,
+      workIntervalMin: 2,
+      restIntervalMin: 2,
+      warmupMin: "",
+      cooldownMin: "",
       type: "aerobic",
       zone: "",
       avgHr: "",
@@ -87,7 +136,6 @@ export default function CardioPage() {
     await load();
   }
 
-  const typeLabel = (type) => (type === "anaerobic" ? "Anaeroob" : "Aeroob");
 
   return (
     <div>
@@ -103,7 +151,7 @@ export default function CardioPage() {
       </h1>
 
       <p style={{ fontSize: 13, color: "#888", marginBottom: 20 }}>
-        Aeroob = vooral zone 1–3 · Anaeroob = zone 4–5
+        {CARDIO_TYPE_HINT}
       </p>
 
       {!showForm ? (
@@ -205,6 +253,46 @@ export default function CardioPage() {
               />
             </div>
             <div>
+              <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 4 }}>Invoer</label>
+              <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, inputMode: "duration" }))}
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    background: form.inputMode === "duration" ? "#e63946" : "#111",
+                    color: form.inputMode === "duration" ? "#fff" : "#888",
+                    border: `1px solid ${form.inputMode === "duration" ? "#e63946" : "#252525"}`,
+                    borderRadius: 8,
+                  }}
+                >
+                  Duur
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, inputMode: "rounds" }))}
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    background: form.inputMode === "rounds" ? "#e63946" : "#111",
+                    color: form.inputMode === "rounds" ? "#fff" : "#888",
+                    border: `1px solid ${form.inputMode === "rounds" ? "#e63946" : "#252525"}`,
+                    borderRadius: 8,
+                  }}
+                >
+                  Rondes
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {form.inputMode === "duration" ? (
+            <div style={{ marginBottom: 12 }}>
               <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 4 }}>Duur (min)</label>
               <input
                 type="number"
@@ -214,7 +302,72 @@ export default function CardioPage() {
                 style={{ width: "100%", padding: "10px 12px", fontSize: 14, background: "#111", border: "1px solid #252525", borderRadius: 8, color: "#f0f0f0" }}
               />
             </div>
-          </div>
+          ) : (
+            <div style={{ background: "#111", border: "1px solid #252525", borderRadius: 10, padding: 12, marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: "#555", marginBottom: 8 }}>Interval (bijv. 2 min hardlopen, 2 min wandelen × rondes)</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                <div>
+                  <label style={{ fontSize: 11, color: "#666", display: "block", marginBottom: 2 }}>Work (min)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.workIntervalMin}
+                    onChange={(e) => setForm((f) => ({ ...f, workIntervalMin: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", fontSize: 14, background: "#0f0f0f", border: "1px solid #252525", borderRadius: 6, color: "#f0f0f0" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: "#666", display: "block", marginBottom: 2 }}>Rest / laag (min)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.restIntervalMin}
+                    onChange={(e) => setForm((f) => ({ ...f, restIntervalMin: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", fontSize: 14, background: "#0f0f0f", border: "1px solid #252525", borderRadius: 6, color: "#f0f0f0" }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
+                <div>
+                  <label style={{ fontSize: 11, color: "#666", display: "block", marginBottom: 2 }}>Aantal rondes</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.rounds}
+                    onChange={(e) => setForm((f) => ({ ...f, rounds: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", fontSize: 14, background: "#0f0f0f", border: "1px solid #252525", borderRadius: 6, color: "#f0f0f0" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: "#666", display: "block", marginBottom: 2 }}>Warming-up (min)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={form.warmupMin}
+                    onChange={(e) => setForm((f) => ({ ...f, warmupMin: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", fontSize: 14, background: "#0f0f0f", border: "1px solid #252525", borderRadius: 6, color: "#f0f0f0" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: "#666", display: "block", marginBottom: 2 }}>Cooling-down (min)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={form.cooldownMin}
+                    onChange={(e) => setForm((f) => ({ ...f, cooldownMin: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", fontSize: 14, background: "#0f0f0f", border: "1px solid #252525", borderRadius: 6, color: "#f0f0f0" }}
+                  />
+                </div>
+              </div>
+              {computedRoundsTotal() != null && (
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#e63946" }}>
+                  Totaal: {computedRoundsTotal()} min
+                </div>
+              )}
+            </div>
+          )}
 
           <div style={{ marginBottom: 12 }}>
             <label style={{ fontSize: 12, color: "#555", display: "block", marginBottom: 4 }}>Type</label>
@@ -235,7 +388,7 @@ export default function CardioPage() {
                     borderRadius: 8,
                   }}
                 >
-                  {t === "aerobic" ? "Aeroob" : "Anaeroob"}
+                  {CARDIO_TYPE_LABELS[t]}
                 </button>
               ))}
             </div>
@@ -345,10 +498,13 @@ export default function CardioPage() {
               </button>
               <div style={{ fontWeight: 700, fontSize: 16 }}>{a.name}</div>
               <div style={{ fontSize: 13, color: "#888", marginTop: 2 }}>{formatDate(a.date)}</div>
+              {roundsSummary(a) && (
+                <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>{roundsSummary(a)}</div>
+              )}
               <div style={{ display: "flex", gap: 12, marginTop: 6, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 13, color: "#e63946" }}>{a.durationMinutes} min</span>
                 <span style={{ fontSize: 13, color: a.type === "anaerobic" ? "#e67e22" : "#2d9e47" }}>
-                  {typeLabel(a.type)}
+                  {getCardioTypeLabel(a.type)}
                 </span>
                 {a.zone && <span style={{ fontSize: 13, color: "#555" }}>Zone {a.zone}</span>}
                 {a.avgHr && <span style={{ fontSize: 13, color: "#555" }}>~{a.avgHr} bpm</span>}

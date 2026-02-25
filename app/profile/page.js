@@ -10,6 +10,7 @@ import {
 } from "@/lib/storage";
 import { getSupabase } from "@/lib/supabase";
 import { getMaxHR, getKarvonenZones, ageFromBirthYear } from "@/lib/hrZones";
+import { getCardioTypeLabel } from "@/lib/cardio";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -292,6 +293,35 @@ export default function ProfilePage() {
         </form>
       </div>
 
+      {/* Cardio overzicht - direct onder Main Lifts */}
+      <div style={{ background: "#0f0f0f", border: "1px solid #252525", borderRadius: 12, padding: 16, marginBottom: 16 }}>
+        <div style={{ fontSize: 11, color: "#555", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>
+          Cardio (laatste 14 dagen)
+        </div>
+        {(cardioSummary.aerobic > 0 || cardioSummary.anaerobic > 0) ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 14, color: "#2d9e47" }}>{getCardioTypeLabel("aerobic")}</span>
+              <span style={{ fontWeight: 700, color: "#f0f0f0" }}>{cardioSummary.aerobic} min</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 14, color: "#e67e22" }}>{getCardioTypeLabel("anaerobic")}</span>
+              <span style={{ fontWeight: 700, color: "#f0f0f0" }}>{cardioSummary.anaerobic} min</span>
+            </div>
+            <Link href="/cardio" style={{ marginTop: 8 }}>
+              <span style={{ fontSize: 13, color: "#e63946", fontWeight: 600 }}>Bekijk & plan cardio →</span>
+            </Link>
+          </div>
+        ) : (
+          <div style={{ color: "#444", fontSize: 14, textAlign: "center", padding: "12px 0" }}>
+            <p style={{ marginBottom: 8 }}>Nog geen cardio gelogd.</p>
+            <Link href="/cardio">
+              <span style={{ fontSize: 13, color: "#e63946", fontWeight: 600 }}>Cardio toevoegen →</span>
+            </Link>
+          </div>
+        )}
+      </div>
+
       {/* Hartslagzones (Karvonen) */}
       <div style={{ background: "#0f0f0f", border: "1px solid #252525", borderRadius: 12, padding: 16, marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -399,35 +429,6 @@ export default function ProfilePage() {
                 )}
               </div>
             ))}
-          </div>
-        )}
-      </div>
-
-      {/* Cardio overzicht */}
-      <div style={{ background: "#0f0f0f", border: "1px solid #252525", borderRadius: 12, padding: 16, marginBottom: 16 }}>
-        <div style={{ fontSize: 11, color: "#555", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>
-          Cardio (laatste 14 dagen)
-        </div>
-        {(cardioSummary.aerobic > 0 || cardioSummary.anaerobic > 0) ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 14, color: "#2d9e47" }}>Aeroob</span>
-              <span style={{ fontWeight: 700, color: "#f0f0f0" }}>{cardioSummary.aerobic} min</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 14, color: "#e67e22" }}>Anaeroob</span>
-              <span style={{ fontWeight: 700, color: "#f0f0f0" }}>{cardioSummary.anaerobic} min</span>
-            </div>
-            <Link href="/cardio" style={{ marginTop: 8 }}>
-              <span style={{ fontSize: 13, color: "#e63946", fontWeight: 600 }}>Bekijk & plan cardio →</span>
-            </Link>
-          </div>
-        ) : (
-          <div style={{ color: "#444", fontSize: 14, textAlign: "center", padding: "12px 0" }}>
-            <p style={{ marginBottom: 8 }}>Nog geen cardio gelogd.</p>
-            <Link href="/cardio">
-              <span style={{ fontSize: 13, color: "#e63946", fontWeight: 600 }}>Cardio toevoegen →</span>
-            </Link>
           </div>
         )}
       </div>
